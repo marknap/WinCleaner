@@ -87,7 +87,6 @@ const hist: Record<string, unknown> = {
   dup_default_roots: ["C:\\Users\\me\\Desktop", "C:\\Users\\me\\Documents", "C:\\Users\\me\\Downloads", "C:\\Users\\me\\Pictures", "C:\\Users\\me\\Videos"],
   drives: [{ path: "C:\\", name: "System", free: 88 * GB, total: 931 * GB }, { path: "D:\\", name: "Games", free: 412 * GB, total: 1863 * GB }],
   clips_summary: { count: 140, size: 23 * GB, folder: "C:\\Users\\me\\Videos" },
-  game_art: null,
   recent_uninstalls: [{ name: "Overwolf", publisher: "Overwolf Ltd.", location: "", date: now - 5 * day }],
 };
 
@@ -99,6 +98,8 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
     case "fps_benchmark": await wait(1500); return r({ process: args!.process, frames: 4210, seconds: 30, avgFps: 140.3, low1: 96.2, low01: 61.8, avgMs: 7.1, maxMs: 21.4 });
     case "app_leftovers": case "recent_leftovers": await wait(400); return r([{ path: "C:\\Users\\me\\AppData\\Roaming\\Overwolf", size: 410 * MB, personal: true, kind: "folder" }, { path: "HKCU\\Software\\Overwolf", size: 0, personal: true, kind: "registry" }]);
     case "restore_point_create": await wait(800); prefs.lastRestorePoint = Math.floor(Date.now() / 1000); return r("Restore point created");
+    // The real app reads this art from Steam's local cache instead.
+    case "game_art": return r(`https://cdn.cloudflare.steamstatic.com/steam/apps/${args!.appid}/header.jpg`);
     case "get_prefs": return r({ ...prefs });
     case "set_prefs": prefs = { ...(args!.p as A.Prefs) }; return r(prefs);
     case "clean_scan": await wait(1600); return r(structuredClone(groups));

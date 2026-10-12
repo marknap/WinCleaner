@@ -9,11 +9,21 @@
   One click for most people, plenty of control for the people who want it.
 </p>
 
+<p align="center">
+  <a href="https://github.com/marknap/WinCleaner/releases/latest"><b>⬇ Download for Windows</b></a>
+  &nbsp;·&nbsp; English &amp; Nederlands &nbsp;·&nbsp; Windows 10 / 11
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/01-home.png" width="900" alt="Home screen with the one-click scan result and health grade" />
+</p>
+
 ---
 
 ## Contents
 
 - [What is this?](#what-is-this)
+- [Screenshots](#screenshots)
 - [Install](#install)
 - [Your first 2 minutes](#your-first-2-minutes)
 - [What every screen does](#what-every-screen-does)
@@ -47,6 +57,34 @@ WinCleaner for Gamers is a free app for Windows 10 and 11 that:
 - **Keeps itself up to date.** New versions install with one click.
 
 Your game saves are never touched, and anything bigger than a cache goes to the Recycle Bin so you can undo it.
+
+---
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/02-clean.png" alt="Clean" /><br/><b>Clean</b>: junk grouped by Gaming, Windows and Browsers. The safe stuff is pre-ticked.</td>
+    <td width="50%"><img src="docs/screenshots/03-game-boost.png" alt="Game Boost" /><br/><b>Game Boost</b>: one button before you play, with a report of what it did.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/05-game-library.png" alt="Game library" /><br/><b>My Games</b>: Steam, Epic, GOG and Battle.net in one place. Dusty games are flagged.</td>
+    <td><img src="docs/screenshots/04-my-games.png" alt="Drive planner and leftovers" /><br/><b>Drive planner &amp; leftovers</b>: what to move when a drive fills up, and folders uninstalled games left behind.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/07-performance.png" alt="Performance" /><br/><b>Performance</b>: live stats, game-server region ping and an FPS benchmark.</td>
+    <td><img src="docs/screenshots/06-startup.png" alt="Startup" /><br/><b>Startup</b>: plain-English advice on what's safe to turn off.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/08-disk-map.png" alt="Disk Map" /><br/><b>Disk Map</b>: see what's eating your drive. Bigger block, bigger file.</td>
+    <td><img src="docs/screenshots/09-history.png" alt="History and achievements" /><br/><b>History</b>: ranks, achievements and Put back for anything removed.</td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/screenshots/10-dutch.png" width="640" alt="Dutch interface" /><br/><b>Nederlands</b>: the whole app is available in Dutch.</td>
+  </tr>
+</table>
+
+<sub>Screenshots use sample data. Regenerate them with <code>npm run dev</code> and <code>npm run screenshots</code>.</sub>
 
 ---
 

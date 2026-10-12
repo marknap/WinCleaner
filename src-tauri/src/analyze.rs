@@ -55,9 +55,9 @@ fn build(path: &Path, depth: usize, progress: &Progress) -> Node {
         }
     }
     if small_count > 0 {
-        children.push(Node { name: format!("{small_count} smaller items"), size: small_size, is_dir: false, bucket: small_count, children: vec![] });
+        children.push(Node { name: crate::trf!("{} smaller items", "{} kleinere items", small_count), size: small_size, is_dir: false, bucket: small_count, children: vec![] });
     }
-    children.sort_by(|a, b| b.size.cmp(&a.size));
+    children.sort_by_key(|c| std::cmp::Reverse(c.size));
     Node { name, size: children.iter().map(|c| c.size).sum(), is_dir: true, bucket: 0, children }
 }
 
@@ -157,12 +157,12 @@ fn find<'a>(root: &Path, node: &'a mut Node, path: &Path) -> Option<&'a mut Node
 pub fn scan(app: Option<AppHandle>, root: String) -> Result<NodeView, String> {
     let root = PathBuf::from(root);
     if !root.is_dir() {
-        return Err("That folder doesn't exist.".into());
+        return Err(crate::l10n::tr("That folder doesn't exist.", "Die map bestaat niet.").into());
     }
-    let progress = Progress::new(app, "Mapping your disk");
+    let progress = Progress::new(app, crate::l10n::tr("Mapping your disk", "Je schijf in kaart brengen"));
     let node = build(&root, 0, &progress);
     if core::cancelled() {
-        return Err("Cancelled".into());
+        return Err(crate::l10n::tr("Cancelled", "Geannuleerd").into());
     }
     let v = view(&root, &root, &node);
     *TREE.lock().unwrap() = Some((root, node));
@@ -171,10 +171,10 @@ pub fn scan(app: Option<AppHandle>, root: String) -> Result<NodeView, String> {
 
 pub fn open(path: String) -> Result<NodeView, String> {
     let mut g = TREE.lock().unwrap();
-    let (root, node) = g.as_mut().ok_or("Scan a drive first.")?;
+    let (root, node) = g.as_mut().ok_or(crate::l10n::tr("Scan a drive first.", "Scan eerst een station."))?;
     let p = PathBuf::from(path);
     let root = root.clone();
-    let n = find(&root, node, &p).ok_or("Folder not found in the map.")?;
+    let n = find(&root, node, &p).ok_or(crate::l10n::tr("Folder not found in the map.", "Map niet gevonden."))?;
     Ok(view(&root, &p, n))
 }
 
@@ -182,15 +182,15 @@ pub fn trash(path: String) -> Result<ActionResult, String> {
     let p = PathBuf::from(&path);
     let size = {
         let mut g = TREE.lock().unwrap();
-        let (root, node) = g.as_mut().ok_or("Scan a drive first.")?;
+        let (root, node) = g.as_mut().ok_or(crate::l10n::tr("Scan a drive first.", "Scan eerst een station."))?;
         let root = root.clone();
         let parent = p.parent().ok_or("Invalid path")?;
         let name = core::file_name(&p);
         find(&root, node, parent).and_then(|n| n.children.iter().find(|c| c.name == name)).map(|c| c.size).unwrap_or(0)
     };
     let mut out = core::remove(vec![RemovalRequest { path: p.clone(), size, permanent: false }], &core::is_user_trashable);
-    history::record("Disk Map", out.history);
-    out.result.message = crate::clean::summary(&out.result);
+    history::record("diskmap", out.history);
+    out.result.message = core::summary(&out.result);
     if out.result.removed > 0 {
         let mut g = TREE.lock().unwrap();
         if let Some((root, node)) = g.as_mut() {

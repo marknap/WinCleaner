@@ -1,7 +1,9 @@
-//! Game library across launchers (Steam, Epic, GOG) and leftover game folders.
+//! Game library across launchers (Steam, Epic, GOG, Battle.net) and leftover game folders.
 
 use crate::core::{self, ActionResult, RemovalRequest};
-use crate::history;
+use crate::l10n::tr;
+use crate::{apps, history};
+use base64::Engine;
 use rayon::prelude::*;
 use serde::Serialize;
 use std::collections::HashSet;
@@ -18,6 +20,8 @@ pub struct Game {
     pub size: u64,
     pub last_played: Option<u64>,
     pub drive: String,
+    /// Registry uninstall id, for games removed through the Uninstaller (Battle.net).
+    pub uninstall_id: Option<String>,
 }
 
 #[derive(Serialize, Clone)]
@@ -129,16 +133,17 @@ pub fn steam_libraries() -> Vec<PathBuf> {
     let Some(root) = steam_root() else { return vec![] };
     let mut libs = vec![root.clone()];
     if let Ok(s) = fs::read_to_string(root.join(r"steamapps\libraryfolders.vdf")) {
-        for (k, v) in kv_pairs(&s) {
-            if k == "path" {
-                let p = PathBuf::from(v);
-                if p.join("steamapps").is_dir() && !libs.iter().any(|l| core::same_path(l, &p)) {
-                    libs.push(p);
-                }
+        for p in library_paths(&s) {
+            if p.join("steamapps").is_dir() && !libs.iter().any(|l| core::same_path(l, &p)) {
+                libs.push(p);
             }
         }
     }
     libs
+}
+
+fn library_paths(vdf: &str) -> Vec<PathBuf> {
+    kv_pairs(vdf).into_iter().filter(|(k, _)| k == "path").map(|(_, v)| PathBuf::from(v)).collect()
 }
 
 struct SteamApp {
@@ -149,26 +154,29 @@ struct SteamApp {
     last_played: Option<u64>,
 }
 
+fn parse_manifest(s: &str) -> Option<SteamApp> {
+    let kv = kv_pairs(s);
+    let id = first(&kv, "appid")?;
+    let dir = first(&kv, "installdir")?;
+    Some(SteamApp {
+        name: first(&kv, "name").unwrap_or_else(|| dir.clone()),
+        id,
+        installdir: dir,
+        size: first(&kv, "sizeondisk").and_then(|v| v.parse().ok()).unwrap_or(0),
+        last_played: first(&kv, "lastplayed").and_then(|v| v.parse().ok()).filter(|v: &u64| *v > 0),
+    })
+}
+
 fn steam_manifests(lib: &Path) -> Vec<SteamApp> {
-    let mut out = vec![];
-    let Ok(rd) = fs::read_dir(lib.join("steamapps")) else { return out };
-    for e in rd.flatten() {
-        let n = e.file_name().to_string_lossy().to_lowercase();
-        if !(n.starts_with("appmanifest_") && n.ends_with(".acf")) {
-            continue;
-        }
-        let Ok(s) = fs::read_to_string(e.path()) else { continue };
-        let kv = kv_pairs(&s);
-        let (Some(id), Some(dir)) = (first(&kv, "appid"), first(&kv, "installdir")) else { continue };
-        out.push(SteamApp {
-            name: first(&kv, "name").unwrap_or_else(|| dir.clone()),
-            id,
-            installdir: dir,
-            size: first(&kv, "sizeondisk").and_then(|v| v.parse().ok()).unwrap_or(0),
-            last_played: first(&kv, "lastplayed").and_then(|v| v.parse().ok()).filter(|v: &u64| *v > 0),
-        });
-    }
-    out
+    let Ok(rd) = fs::read_dir(lib.join("steamapps")) else { return vec![] };
+    rd.flatten()
+        .filter(|e| {
+            let n = e.file_name().to_string_lossy().to_lowercase();
+            n.starts_with("appmanifest_") && n.ends_with(".acf")
+        })
+        .filter_map(|e| fs::read_to_string(e.path()).ok())
+        .filter_map(|s| parse_manifest(&s))
+        .collect()
 }
 
 const STEAM_TOOLS: [&str; 2] = ["228980", "1070560"]; // redistributables, Linux runtime
@@ -193,14 +201,34 @@ fn steam_games() -> Vec<Game> {
                 path: path.display().to_string(),
                 size: a.size,
                 last_played: a.last_played,
+                uninstall_id: None,
             });
         }
     }
     out
 }
 
+/// Cover art from Steam's local library cache, as a data URL (no network needed).
+pub fn steam_art(appid: &str) -> Option<String> {
+    if appid.is_empty() || !appid.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let cache = steam_root()?.join(r"appcache\librarycache");
+    let mut candidates = vec![cache.join(format!("{appid}_header.jpg")), cache.join(appid).join("header.jpg")];
+    // Newer Steam versions nest art one level deeper in a hashed folder.
+    if let Ok(rd) = fs::read_dir(cache.join(appid)) {
+        for e in rd.flatten().filter(|e| e.path().is_dir()) {
+            candidates.push(e.path().join("header.jpg"));
+        }
+    }
+    candidates.push(cache.join(appid).join("library_header.jpg"));
+    let file = candidates.into_iter().find(|p| p.is_file() && fs::metadata(p).map(|m| m.len() < 2_000_000).unwrap_or(false))?;
+    let bytes = fs::read(file).ok()?;
+    Some(format!("data:image/jpeg;base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
+}
+
 // ---------------------------------------------------------------------------
-// Epic & GOG
+// Epic, GOG, Battle.net
 // ---------------------------------------------------------------------------
 
 fn epic_manifests() -> Vec<serde_json::Value> {
@@ -219,11 +247,7 @@ fn epic_games() -> Vec<Game> {
         .filter_map(|v| {
             let id = v.get("AppName")?.as_str()?.to_string();
             let path = v.get("InstallLocation")?.as_str()?.to_string();
-            let is_game = v
-                .get("AppCategories")
-                .and_then(|c| c.as_array())
-                .map(|c| c.iter().any(|x| x.as_str() == Some("games")))
-                .unwrap_or(true);
+            let is_game = v.get("AppCategories").and_then(|c| c.as_array()).map(|c| c.iter().any(|x| x.as_str() == Some("games"))).unwrap_or(true);
             if !is_game {
                 return None;
             }
@@ -235,13 +259,14 @@ fn epic_games() -> Vec<Game> {
                 id,
                 path,
                 last_played: None,
+                uninstall_id: None,
             })
         })
         .collect()
 }
 
+#[cfg(windows)]
 fn gog_games() -> Vec<Game> {
-    #[cfg(windows)]
     {
         use winreg::enums::*;
         use winreg::RegKey;
@@ -258,8 +283,7 @@ fn gog_games() -> Vec<Game> {
                 Some((id, name, path))
             })
             .collect();
-        return raw
-            .into_par_iter()
+        raw.into_par_iter()
             .filter(|(_, _, p)| Path::new(p).is_dir())
             .map(|(id, name, path)| Game {
                 launcher: "gog".into(),
@@ -269,11 +293,35 @@ fn gog_games() -> Vec<Game> {
                 name,
                 path,
                 last_played: None,
+                uninstall_id: None,
             })
-            .collect();
+            .collect()
     }
-    #[cfg(not(windows))]
+}
+#[cfg(not(windows))]
+fn gog_games() -> Vec<Game> {
     vec![]
+}
+
+/// Battle.net registers each game as a normal Windows program whose uninstaller
+/// is "Battle.net Launcher.exe".
+fn battlenet_games() -> Vec<Game> {
+    apps::battlenet_entries()
+        .into_par_iter()
+        .map(|a| {
+            let size = if a.size > 0 || a.location.is_empty() { a.size } else { core::measure(Path::new(&a.location), None).size };
+            Game {
+                launcher: "battlenet".into(),
+                drive: drive_of(Path::new(&a.location)),
+                id: a.id.clone(),
+                name: a.name,
+                path: a.location,
+                size,
+                last_played: None,
+                uninstall_id: Some(a.id),
+            }
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -284,16 +332,16 @@ const KEEP_COMMON: [&str; 2] = ["steamworks shared", "steam controller configs"]
 
 pub fn find_leftovers() -> Vec<GameLeftover> {
     let steam_running = core::running_processes().contains("steam.exe");
-    let mut cands: Vec<(PathBuf, &str, String, bool)> = vec![];
+    let mut cands: Vec<(PathBuf, &str, &str, bool)> = vec![];
     for lib in steam_libraries() {
         let apps = steam_manifests(&lib);
         let dirs: HashSet<String> = apps.iter().map(|a| a.installdir.to_lowercase()).collect();
         let ids: HashSet<String> = apps.iter().map(|a| a.id.clone()).collect();
         let sa = lib.join("steamapps");
         for (sub, kind, note) in [
-            ("common", "game", "Folder from an uninstalled game. May contain mods or old saves."),
-            ("downloading", "download", "Unfinished or cancelled download."),
-            ("temp", "temp", "Temporary download data."),
+            ("common", "game", tr("Folder from an uninstalled game. May contain mods or old saves.", "Map van een verwijderde game. Kan mods of oude saves bevatten.")),
+            ("downloading", "download", tr("Unfinished or cancelled download.", "Onvoltooide of geannuleerde download.")),
+            ("temp", "temp", tr("Temporary download data.", "Tijdelijke downloadgegevens.")),
         ] {
             let Ok(rd) = fs::read_dir(sa.join(sub)) else { continue };
             for e in rd.flatten() {
@@ -305,7 +353,7 @@ pub fn find_leftovers() -> Vec<GameLeftover> {
                     _ => true,
                 };
                 if orphan {
-                    cands.push((e.path(), kind, note.to_string(), sub != "common" && steam_running));
+                    cands.push((e.path(), kind, note, sub != "common" && steam_running));
                 }
             }
         }
@@ -317,7 +365,7 @@ pub fn find_leftovers() -> Vec<GameLeftover> {
             size: core::measure(&p, None).size,
             path: p.display().to_string(),
             kind: kind.into(),
-            note,
+            note: note.into(),
             in_use,
         })
         .filter(|l| l.size > 0 || l.kind == "game")
@@ -325,20 +373,20 @@ pub fn find_leftovers() -> Vec<GameLeftover> {
 }
 
 pub fn library() -> Library {
-    let (mut games, (epic, gog)) = rayon::join(steam_games, || rayon::join(epic_games, gog_games));
+    let ((mut games, epic), (gog, bnet)) = rayon::join(|| rayon::join(steam_games, epic_games), || rayon::join(gog_games, battlenet_games));
     let mut launchers = vec![];
     if steam_root().is_some() {
         launchers.push("steam".to_string());
     }
-    if !epic.is_empty() {
-        launchers.push("epic".into());
-    }
-    if !gog.is_empty() {
-        launchers.push("gog".into());
+    for (l, v) in [("epic", &epic), ("gog", &gog), ("battlenet", &bnet)] {
+        if !v.is_empty() {
+            launchers.push(l.into());
+        }
     }
     games.extend(epic);
     games.extend(gog);
-    games.sort_by(|a, b| b.size.cmp(&a.size));
+    games.extend(bnet);
+    games.sort_by_key(|g| std::cmp::Reverse(g.size));
     Library { games, leftovers: find_leftovers(), launchers }
 }
 
@@ -350,8 +398,9 @@ pub fn trash_leftovers(paths: Vec<String>) -> ActionResult {
         .map(|l| RemovalRequest { path: PathBuf::from(&l.path), size: l.size, permanent: false })
         .collect();
     let allowed: HashSet<String> = reqs.iter().map(|r| r.path.display().to_string()).collect();
-    let out = core::remove(reqs, &|p| allowed.contains(&p.display().to_string()));
-    history::record("Game leftovers", out.history);
+    let mut out = core::remove(reqs, &|p| allowed.contains(&p.display().to_string()));
+    history::record("gameleftovers", out.history);
+    out.result.message = core::summary(&out.result);
     out.result
 }
 
@@ -361,41 +410,95 @@ pub fn trash_leftovers(paths: Vec<String>) -> ActionResult {
 
 /// Build a launcher URL from a known game. Never opens arbitrary URLs.
 pub fn action_url(launcher: &str, id: &str, action: &str) -> Result<String, String> {
+    let unknown = || tr("Unknown action.", "Onbekende actie.").to_string();
     match launcher {
         "steam" => {
             if id.is_empty() || !id.chars().all(|c| c.is_ascii_digit()) {
-                return Err("Invalid Steam app id.".into());
+                return Err(tr("Invalid Steam app id.", "Ongeldige Steam-app-id.").into());
             }
             Ok(match action {
                 "play" => format!("steam://rungameid/{id}"),
                 "uninstall" => format!("steam://uninstall/{id}"),
                 "verify" => format!("steam://validate/{id}"),
-                _ => return Err("Unknown action.".into()),
+                _ => return Err(unknown()),
             })
         }
         "epic" => {
             let m = epic_manifests()
                 .into_iter()
                 .find(|v| v.get("AppName").and_then(|x| x.as_str()) == Some(id))
-                .ok_or("Game not found.")?;
+                .ok_or(tr("Game not found.", "Game niet gevonden."))?;
             let s = |k: &str| m.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
             let triple = format!("{}%3A{}%3A{}", s("CatalogNamespace"), s("CatalogItemId"), s("AppName"));
             if !triple.chars().all(|c| c.is_ascii_alphanumeric() || c == '%' || c == '-' || c == '_') {
-                return Err("Unexpected Epic manifest data.".into());
+                return Err(tr("Unexpected Epic manifest data.", "Onverwachte Epic-gegevens.").into());
             }
             Ok(match action {
                 "play" => format!("com.epicgames.launcher://apps/{triple}?action=launch&silent=true"),
                 "verify" => format!("com.epicgames.launcher://apps/{triple}?action=verify"),
                 "uninstall" => "com.epicgames.launcher://store/library".into(),
-                _ => return Err("Unknown action.".into()),
+                _ => return Err(unknown()),
             })
         }
         "gog" => {
             if !id.chars().all(|c| c.is_ascii_digit()) {
-                return Err("Invalid GOG id.".into());
+                return Err(tr("Invalid GOG id.", "Ongeldige GOG-id.").into());
             }
             Ok(format!("goggalaxy://openGameView/{id}"))
         }
-        _ => Err("Unknown launcher.".into()),
+        "battlenet" => match action {
+            "play" => Ok("battlenet://".into()),
+            _ => Err(unknown()),
+        },
+        _ => Err(tr("Unknown launcher.", "Onbekende launcher.").into()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_library_folders() {
+        let vdf = r#""libraryfolders"
+{
+	"0"
+	{
+		"path"		"C:\\Program Files (x86)\\Steam"
+		"apps" { "228980" "123" }
+	}
+	"1"
+	{
+		"path"		"D:\\SteamLibrary"
+	}
+}"#;
+        let p = library_paths(vdf);
+        assert_eq!(p, vec![PathBuf::from(r"C:\Program Files (x86)\Steam"), PathBuf::from(r"D:\SteamLibrary")]);
+    }
+
+    #[test]
+    fn parses_app_manifest() {
+        let acf = r#""AppState"
+{
+	"appid"		"1245620"
+	"name"		"ELDEN RING"
+	"installdir"		"ELDEN RING"
+	"SizeOnDisk"		"65498845184"
+	"LastPlayed"		"1728000000"
+	"UserConfig" { "language" "english" }
+}"#;
+        let a = parse_manifest(acf).unwrap();
+        assert_eq!((a.id.as_str(), a.name.as_str(), a.installdir.as_str()), ("1245620", "ELDEN RING", "ELDEN RING"));
+        assert_eq!(a.size, 65_498_845_184);
+        assert_eq!(a.last_played, Some(1_728_000_000));
+    }
+
+    #[test]
+    fn launcher_urls_are_validated() {
+        assert_eq!(action_url("steam", "730", "verify").unwrap(), "steam://validate/730");
+        assert!(action_url("steam", "730; calc", "play").is_err());
+        assert!(action_url("steam", "730", "format-c").is_err());
+        assert!(action_url("gog", "12a", "play").is_err());
+        assert!(action_url("evil", "1", "play").is_err());
     }
 }

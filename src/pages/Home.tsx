@@ -3,7 +3,9 @@ import { invoke } from "../api";
 import type { ActionResult, CleanGroup, Drive, FileEntry, Library, StartupItem } from "../api";
 import { Badge, Banner, Bar, Button, Card, CountUp, Icon, Ring, Spinner } from "../components";
 import { defaultSelection, selectedTargets, useStore } from "../store";
-import { bytes, grade, rankOf, xpOf } from "../util";
+import { L } from "../i18n";
+import { weekStreak } from "../achievements";
+import { bytes, grade, num, rankName, rankOf, xpOf } from "../util";
 
 interface Findings {
   lib: Library | null;
@@ -16,7 +18,7 @@ interface Findings {
 // Survives page switches for the lifetime of the window.
 let cached: Findings | null = null;
 
-const STEPS = ["Junk & caches", "Game library", "Startup apps", "Big files"];
+const STEPS = () => [L("Junk & caches", "Rommel en caches"), L("Game library", "Gamebibliotheek"), L("Startup apps", "Opstartapps"), L("Big files", "Grote bestanden")];
 
 export default function Home() {
   const s = useStore();
@@ -72,9 +74,11 @@ export default function Home() {
 
   async function cleanNow() {
     if (!groups) return;
+    const targets = selectedTargets(groups, s.clean.selected);
+    if (!(await s.confirmPermanent(targets))) return;
     setCleaning(true);
     try {
-      const r = await invoke<ActionResult>("clean_run", { targets: selectedTargets(groups, s.clean.selected), tool: "Smart Scan" });
+      const r = await invoke<ActionResult>("clean_run", { targets, tool: "smart" });
       s.toast(r.message, r.failed.length ? "info" : "ok");
       if (r.freed > 0) s.celebrate();
       setCleanedNow(r.freed);
@@ -97,10 +101,13 @@ export default function Home() {
       setCleaning(true);
       try {
         const g = await invoke<CleanGroup[]>("clean_scan", { onlyAuto: true });
-        const r = await invoke<ActionResult>("clean_run", { targets: selectedTargets(g, defaultSelection(g)), tool: "Quick Clean" });
-        s.toast(r.message);
-        if (r.freed > 0) s.celebrate();
-        s.refreshHistory();
+        const targets = selectedTargets(g, defaultSelection(g));
+        if (await s.confirmPermanent(targets)) {
+          const r = await invoke<ActionResult>("clean_run", { targets, tool: "quick" });
+          s.toast(r.message);
+          if (r.freed > 0) s.celebrate();
+          s.refreshHistory();
+        }
       } catch (e) {
         s.toast(String(e), "err");
       }
@@ -113,12 +120,14 @@ export default function Home() {
   const scanning = step >= 0;
   const h = s.history;
   const rank = h ? rankOf(xpOf(h)) : null;
+  const streak = h ? weekStreak(h) : 0;
 
   return (
     <div className="page home">
       {s.info && !s.info.isAdmin && (
-        <Banner tone="cyan" icon="shield" action={<Button small icon="shield" onClick={s.restartAdmin}>Restart as admin</Button>}>
-          <b>Unlock full power.</b> Windows Update leftovers, system crash dumps and a few boosts need admin rights.
+        <Banner tone="cyan" icon="shield" action={<Button small icon="shield" onClick={s.restartAdmin}>{L("Restart as admin", "Herstart als beheerder")}</Button>}>
+          <b>{L("Unlock full power.", "Ontgrendel alles.")}</b>{" "}
+          {L("Windows Update leftovers, old Windows installs, system crash dumps and a few boosts need admin rights.", "Windows Update-restjes, oude Windows-installaties, systeemcrashdumps en een paar boosts hebben beheerdersrechten nodig.")}
         </Banner>
       )}
 
@@ -129,8 +138,8 @@ export default function Home() {
               <div className="orb-ring" />
               <div className="orb-core">
                 <Spinner size={28} />
-                <b>{STEPS[step]}</b>
-                <span className="mono small">{bytes(s.progress?.bytes ?? 0)} checked</span>
+                <b>{STEPS()[step]}</b>
+                <span className="mono small">{bytes(s.progress?.bytes ?? 0)} {L("checked", "gecontroleerd")}</span>
               </div>
             </div>
           ) : findings && cleanedNow === null && groups ? (
@@ -140,27 +149,27 @@ export default function Home() {
               <div className="orb-ring" />
               <div className="orb-core">
                 <Icon name="bolt" size={40} />
-                <b>{findings ? "SCAN AGAIN" : "SCAN"}</b>
-                <span>{cleanedNow !== null ? `Freed ${bytes(cleanedNow)} · GG!` : "One click checkup"}</span>
+                <b>{findings ? L("SCAN AGAIN", "OPNIEUW") : "SCAN"}</b>
+                <span>{cleanedNow !== null ? L(`Freed ${bytes(cleanedNow)} · GG!`, `${bytes(cleanedNow)} vrijgemaakt · GG!`) : L("One click checkup", "Check in één klik")}</span>
               </div>
             </button>
           )}
           {(scanning || !findings || !groups) && (
             <div className="hero-steps">
-              {STEPS.map((label, i) => (
+              {STEPS().map((label, i) => (
                 <span key={label} className={step === i ? "active" : step > i ? "done" : ""}>
                   {step > i ? <Icon name="check" size={13} /> : <i />} {label}
                 </span>
               ))}
             </div>
           )}
-          {scanning && <Button small icon="x" onClick={cancel}>Cancel</Button>}
+          {scanning && <Button small icon="x" onClick={cancel}>{L("Cancel", "Annuleren")}</Button>}
           {!scanning && findings && groups && (
             <div className="hero-cta">
               <Button kind="primary" icon="sparkle" onClick={cleanNow} disabled={cleaning || junk === 0}>
-                {cleaning ? "Cleaning..." : junk > 0 ? `Clean ${bytes(junk)}` : "Nothing to clean"}
+                {cleaning ? L("Cleaning...", "Opschonen...") : junk > 0 ? L(`Clean ${bytes(junk)}`, `${bytes(junk)} opschonen`) : L("Nothing to clean", "Niets op te schonen")}
               </Button>
-              <Button icon="refresh" onClick={scan}>Rescan</Button>
+              <Button icon="refresh" onClick={scan}>{L("Rescan", "Opnieuw scannen")}</Button>
             </div>
           )}
         </div>
@@ -173,24 +182,29 @@ export default function Home() {
                   <Icon name="trophy" size={26} />
                 </div>
                 <div>
-                  <span className="eyebrow">Your rank</span>
-                  <h3 style={{ color: rank.rank.color }}>{rank.rank.name}</h3>
+                  <span className="eyebrow">{L("Your rank", "Jouw rang")}</span>
+                  <h3 style={{ color: rank.rank.color }}>{rankName(rank.rank)}</h3>
                 </div>
                 <div className="rank-xp mono"><CountUp value={xpOf(h)} /> XP</div>
               </div>
               <div className="xp-bar"><i style={{ width: `${rank.progress * 100}%`, background: rank.rank.color }} /></div>
-              <p className="muted small">{rank.next ? `${(rank.next.min - xpOf(h)).toLocaleString()} XP to ${rank.next.name}` : "Max rank reached. Legendary."}</p>
+              <p className="muted small">
+                {rank.next ? L(`${num(rank.next.min - xpOf(h))} XP to ${rankName(rank.next)}`, `Nog ${num(rank.next.min - xpOf(h))} XP tot ${rankName(rank.next)}`) : L("Max rank reached. Legendary.", "Hoogste rang bereikt. Legendarisch.")}
+              </p>
               <div className="rank-stats">
-                <div><b>{bytes(h.lifetimeFreed)}</b><span>freed</span></div>
+                <div><b>{bytes(h.lifetimeFreed)}</b><span>{L("freed", "vrijgemaakt")}</span></div>
                 <div><b>{h.boosts}</b><span>boosts</span></div>
-                <div><b>{h.scans}</b><span>scans</span></div>
+                <div className={streak > 0 ? "streak" : ""}>
+                  <b>{streak > 0 && <Icon name="flame" size={14} />} {streak}</b>
+                  <span>{L("week streak", "weken op rij")}</span>
+                </div>
               </div>
             </Card>
           )}
           {s.info && (
             <Card className="rig-card">
-              <span className="eyebrow">Your rig</span>
-              <h3>{s.info.host || "This PC"}</h3>
+              <span className="eyebrow">{L("Your rig", "Jouw rig")}</span>
+              <h3>{s.info.host || L("This PC", "Deze pc")}</h3>
               <ul className="rig-list">
                 <li><Icon name="cpu" size={16} /> {s.info.cpu}</li>
                 <li><Icon name="ram" size={16} /> {bytes(s.info.ram, 0)} RAM</li>
@@ -204,9 +218,9 @@ export default function Home() {
       {findings && !scanning && <FindingCards f={findings} junk={junk} groups={groups} />}
 
       <section className="quick-row">
-        <QuickAction icon="rocket" color="#ff2bd6" title="Game Boost" text="Max performance before you play" onClick={() => s.go("boost")} />
-        <QuickAction icon="gamepad" color="#ffc93c" title="My Games" text="See which games eat your SSD" onClick={() => s.go("games")} />
-        <QuickAction icon="gauge" color="#4ef2d0" title="Performance" text="Live CPU, GPU, RAM and ping" onClick={() => s.go("performance")} />
+        <QuickAction icon="rocket" color="#ff2bd6" title="Game Boost" text={L("Max performance before you play", "Maximale prestaties voor je gaat spelen")} onClick={() => s.go("boost")} />
+        <QuickAction icon="gamepad" color="#ffc93c" title={L("My Games", "Mijn games")} text={L("See which games eat your SSD", "Zie welke games je SSD opeten")} onClick={() => s.go("games")} />
+        <QuickAction icon="gauge" color="#4ef2d0" title={L("Performance", "Prestaties")} text={L("Live CPU, GPU, RAM and ping", "Live CPU, GPU, RAM en ping")} onClick={() => s.go("performance")} />
       </section>
     </div>
   );
@@ -233,7 +247,7 @@ function ResultOrb({ score, junk }: { score: number; junk: number }) {
         <span className="grade-score mono"><CountUp value={score} /> / 100</span>
       </Ring>
       <p className="grade-text">{g.text}</p>
-      {junk > 0 && <p className="muted small">Found <b className="text-lime">{bytes(junk)}</b> of junk ready to clean</p>}
+      {junk > 0 && <p className="muted small">{L("Found", "Gevonden:")} <b className="text-lime">{bytes(junk)}</b> {L("of junk ready to clean", "rommel klaar om op te ruimen")}</p>}
     </div>
   );
 }
@@ -247,40 +261,41 @@ function FindingCards({ f, junk, groups }: { f: Findings; junk: number; groups: 
   const big = (f.big ?? []).filter((b) => b.size >= minBig);
   const sys = f.drives.find((d) => d.path.toUpperCase().startsWith("C:")) ?? f.drives[0];
   const cats = groups?.filter((g) => g.items.some((i) => s.clean.selected.has(`${g.id}|${i.path}`))).length ?? 0;
+  const review = L("Review", "Bekijken");
 
   return (
     <section className="findings">
       <Card className="finding" glow="#39ff88">
-        <div className="finding-head"><Icon name="sparkle" /><span>Junk files</span></div>
-        <b className="finding-num text-lime">{groups ? bytes(junk) : "Cleaned"}</b>
-        <p>{groups ? `${cats} categories, safe to remove` : "Nice. Run a scan again anytime."}</p>
-        <Button small onClick={() => s.go("clean")}>Review</Button>
+        <div className="finding-head"><Icon name="sparkle" /><span>{L("Junk files", "Rommel")}</span></div>
+        <b className="finding-num text-lime">{groups ? bytes(junk) : L("Cleaned", "Opgeruimd")}</b>
+        <p>{groups ? L(`${cats} categories, safe to remove`, `${cats} categorieën, veilig te verwijderen`) : L("Nice. Run a scan again anytime.", "Netjes. Scan gerust nog eens.")}</p>
+        <Button small onClick={() => s.go("clean")}>{review}</Button>
       </Card>
       <Card className="finding" glow="#7aa8ff">
-        <div className="finding-head"><Icon name="power" /><span>Startup hogs</span></div>
+        <div className="finding-head"><Icon name="power" /><span>{L("Startup hogs", "Opstartvreters")}</span></div>
         <b className="finding-num" style={{ color: "#7aa8ff" }}>{slow.length}</b>
-        <p>{slow.length ? `${slow.slice(0, 3).map((x) => x.name).join(", ")}${slow.length > 3 ? "..." : ""} launch with Windows` : "Your startup is lean"}</p>
-        <Button small onClick={() => s.go("startup")}>{slow.length ? "Fix" : "View"}</Button>
+        <p>{slow.length ? L(`${slow.slice(0, 3).map((x) => x.name).join(", ")}${slow.length > 3 ? "..." : ""} launch with Windows`, `${slow.slice(0, 3).map((x) => x.name).join(", ")}${slow.length > 3 ? "..." : ""} starten met Windows`) : L("Your startup is lean", "Je opstart is lekker licht")}</p>
+        <Button small onClick={() => s.go("startup")}>{slow.length ? L("Fix", "Oplossen") : L("View", "Bekijken")}</Button>
       </Card>
       <Card className="finding" glow="#ffc93c">
-        <div className="finding-head"><Icon name="gamepad" /><span>Game leftovers</span></div>
+        <div className="finding-head"><Icon name="gamepad" /><span>{L("Game leftovers", "Game-restjes")}</span></div>
         <b className="finding-num text-gold">{bytes(leftoverSize)}</b>
-        <p>{leftovers.length ? `${leftovers.length} folders from uninstalled games` : `${f.lib?.games.length ?? 0} games installed, no leftovers`}</p>
-        <Button small onClick={() => s.go("games")}>Review</Button>
+        <p>{leftovers.length ? L(`${leftovers.length} folders from uninstalled games`, `${leftovers.length} mappen van verwijderde games`) : L(`${f.lib?.games.length ?? 0} games installed, no leftovers`, `${f.lib?.games.length ?? 0} games geïnstalleerd, geen restjes`)}</p>
+        <Button small onClick={() => s.go("games")}>{review}</Button>
       </Card>
       <Card className="finding" glow="#ffb020">
-        <div className="finding-head"><Icon name="file" /><span>Big files</span></div>
+        <div className="finding-head"><Icon name="file" /><span>{L("Big files", "Grote bestanden")}</span></div>
         <b className="finding-num text-amber">{big.length}</b>
-        <p>{big.length ? `${bytes(big.reduce((a, b) => a + b.size, 0))} in files over ${bytes(minBig, 0)}` : "No huge files hiding"}</p>
-        <Button small onClick={() => s.go("bigfiles")}>Review</Button>
+        <p>{big.length ? L(`${bytes(big.reduce((a, b) => a + b.size, 0))} in files over ${bytes(minBig, 0)}`, `${bytes(big.reduce((a, b) => a + b.size, 0))} in bestanden boven ${bytes(minBig, 0)}`) : L("No huge files hiding", "Geen enorme bestanden gevonden")}</p>
+        <Button small onClick={() => s.go("bigfiles")}>{review}</Button>
       </Card>
       {sys && (
         <Card className="finding" glow="#00f0ff">
-          <div className="finding-head"><Icon name="disk" /><span>{sys.path} drive</span></div>
+          <div className="finding-head"><Icon name="disk" /><span>{L(`${sys.path} drive`, `Station ${sys.path}`)}</span></div>
           <b className="finding-num text-cyan">{bytes(sys.free, 0)}</b>
-          <p>free of {bytes(sys.total, 0)}</p>
+          <p>{L(`free of ${bytes(sys.total, 0)}`, `vrij van ${bytes(sys.total, 0)}`)}</p>
           <Bar value={1 - sys.free / sys.total} color={sys.free / sys.total < 0.15 ? "var(--red)" : "var(--cyan)"} />
-          {sys.free / sys.total < 0.15 && <Badge tone="red" icon="alert">Running low</Badge>}
+          {sys.free / sys.total < 0.15 && <Badge tone="red" icon="alert">{L("Running low", "Bijna vol")}</Badge>}
         </Card>
       )}
     </section>

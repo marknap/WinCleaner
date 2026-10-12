@@ -3,6 +3,7 @@ import { invoke, pickFolder } from "../api";
 import type { ActionResult, ChildView, Drive, NodeView } from "../api";
 import { Bar, Button, Card, EmptyStart, Icon, ScanProgress, ToolHeader } from "../components";
 import { useStore } from "../store";
+import { L } from "../i18n";
 import { bytes, cx } from "../util";
 
 const KIND_COLORS: Record<string, string> = {
@@ -10,7 +11,10 @@ const KIND_COLORS: Record<string, string> = {
   app: "#00c2a8", game: "#39ff88", doc: "#6b7cff", code: "#4ef2d0", other: "#56607f", bucket: "#2a3050",
 };
 
-const LEGEND: [string, string][] = [["folder", "Folders"], ["game", "Game data"], ["video", "Video"], ["image", "Images"], ["audio", "Audio"], ["archive", "Archives"], ["app", "Programs"], ["other", "Other"]];
+const LEGEND = (): [string, string][] => [
+  ["folder", L("Folders", "Mappen")], ["game", L("Game data", "Gamedata")], ["video", "Video"], ["image", L("Images", "Afbeeldingen")],
+  ["audio", "Audio"], ["archive", L("Archives", "Archieven")], ["app", L("Programs", "Programma's")], ["other", L("Other", "Overig")],
+];
 
 interface Rect { x: number; y: number; w: number; h: number; c: ChildView }
 
@@ -109,10 +113,10 @@ export default function DiskMap() {
     try {
       const r = await invoke<ActionResult>("analyze_trash", { path: c.path });
       if (r.removed) {
-        s.toast(`Moved ${c.name} to the Recycle Bin`);
+        s.toast(L(`Moved ${c.name} to the Recycle Bin`, `${c.name} naar de Prullenbak verplaatst`));
         s.refreshHistory();
         if (view) open(view.path);
-      } else s.toast(r.failed[0] ?? "That one is protected.", "err");
+      } else s.toast(r.failed[0] ?? L("That one is protected.", "Die is beschermd."), "err");
     } catch (e) {
       s.toast(String(e), "err");
     }
@@ -136,7 +140,7 @@ export default function DiskMap() {
 
   return (
     <div className="page">
-      <ToolHeader icon="map" title="Disk Map" color="#00c2ff" subtitle="See what's eating your drives. Bigger block, bigger file." />
+      <ToolHeader icon="map" title={L("Disk Map", "Schijfkaart")} color="#00c2ff" subtitle={L("See what's eating your drives. Bigger block, bigger file.", "Zie wat je schijven opeet. Groter blok, groter bestand.")} />
       {scanning ? (
         <ScanProgress progress={s.progress} onCancel={() => invoke("cancel_job")} />
       ) : !view ? (
@@ -148,16 +152,16 @@ export default function DiskMap() {
                 <b>{d.path}</b>
                 <span className="muted small">{d.name}</span>
                 <Bar value={1 - d.free / d.total} color={d.free / d.total < 0.1 ? "var(--red)" : "var(--cyan)"} />
-                <span className="small">{bytes(d.free, 0)} free of {bytes(d.total, 0)}</span>
+                <span className="small">{L(`${bytes(d.free, 0)} free of ${bytes(d.total, 0)}`, `${bytes(d.free, 0)} vrij van ${bytes(d.total, 0)}`)}</span>
               </Card>
             ))}
             <Card className="drive-tile" onClick={async () => { const p = await pickFolder(); if (p) scan(p); }}>
               <Icon name="folder" size={28} />
-              <b>Pick a folder</b>
-              <span className="muted small">Map just one folder</span>
+              <b>{L("Pick a folder", "Kies een map")}</b>
+              <span className="muted small">{L("Map just one folder", "Breng één map in kaart")}</span>
             </Card>
           </div>
-          {!drives.length && <EmptyStart icon="map" color="#00c2ff" title="Map a drive" text="Pick a drive to scan." action="Pick a folder" onAction={async () => { const p = await pickFolder(); if (p) scan(p); }} />}
+          {!drives.length && <EmptyStart icon="map" color="#00c2ff" title={L("Map a drive", "Breng een station in kaart")} text={L("Pick a drive to scan.", "Kies een station om te scannen.")} action={L("Pick a folder", "Kies een map")} onAction={async () => { const p = await pickFolder(); if (p) scan(p); }} />}
         </>
       ) : (
         <>
@@ -191,23 +195,23 @@ export default function DiskMap() {
             <Card className="map-side">
               {info ? (
                 <>
-                  <span className="eyebrow">{info.isDir ? "Folder" : info.kind === "bucket" ? "Small files" : "File"}</span>
+                  <span className="eyebrow">{info.isDir ? L("Folder", "Map") : info.kind === "bucket" ? L("Small files", "Kleine bestanden") : L("File", "Bestand")}</span>
                   <h3 className="ellipsis" title={info.name}>{info.name}</h3>
                   <b className="text-cyan mono big">{bytes(info.size)}</b>
                   <p className="mono small muted break">{info.path}</p>
                   {info.path && picked?.path === info.path && (
                     <div className="map-actions">
-                      <Button small icon="folder" onClick={() => invoke("reveal", { path: info.path })}>Show in Explorer</Button>
-                      <Button small kind="danger" icon="trash" onClick={() => trash(info)}>Recycle</Button>
+                      <Button small icon="folder" onClick={() => invoke("reveal", { path: info.path })}>{L("Show in Explorer", "Tonen in Verkenner")}</Button>
+                      <Button small kind="danger" icon="trash" onClick={() => trash(info)}>{L("Recycle", "Naar Prullenbak")}</Button>
                     </div>
                   )}
-                  {info.path && picked?.path !== info.path && <p className="muted small">Right-click a block to act on it.</p>}
+                  {info.path && picked?.path !== info.path && <p className="muted small">{L("Right-click a block to act on it.", "Klik met rechts op een blok voor acties.")}</p>}
                 </>
               ) : (
-                <p className="muted">Hover a block for details. Click folders to dive in, right-click to act.</p>
+                <p className="muted">{L("Hover a block for details. Click folders to dive in, right-click to act.", "Wijs een blok aan voor details. Klik op mappen om erin te duiken, rechtsklik voor acties.")}</p>
               )}
               <ul className="legend small">
-                {LEGEND.map(([k, l]) => <li key={k}><i style={{ background: KIND_COLORS[k] }} /> <span>{l}</span></li>)}
+                {LEGEND().map(([k, l]) => <li key={k}><i style={{ background: KIND_COLORS[k] }} /> <span>{l}</span></li>)}
               </ul>
             </Card>
           </div>

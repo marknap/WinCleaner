@@ -35,6 +35,7 @@ pub struct Sample {
     pub mem_total: u64,
     pub gpu: Option<f32>,
     pub gpu_extra: Option<GpuExtra>,
+    pub cpu_temp: Option<f32>,
     pub net_in: u64,
     pub net_out: u64,
     pub ping: Option<i64>,
@@ -56,6 +57,7 @@ struct Monitor {
 static MON: Mutex<Option<Monitor>> = Mutex::new(None);
 static PING: AtomicI64 = AtomicI64::new(-2);
 static GPU_EXTRA: Mutex<Option<GpuExtra>> = Mutex::new(None);
+static CPU_TEMP: Mutex<Option<f32>> = Mutex::new(None);
 static LAST_REQ: AtomicU64 = AtomicU64::new(0);
 static BG_RUNNING: AtomicBool = AtomicBool::new(false);
 
@@ -100,6 +102,7 @@ pub fn sample() -> Sample {
         mem_total: m.sys.total_memory(),
         gpu: m.gpu.as_mut().and_then(|g| g.usage()),
         gpu_extra: GPU_EXTRA.lock().unwrap().clone(),
+        cpu_temp: *CPU_TEMP.lock().unwrap(),
         net_in: (rx as f64 / dt) as u64,
         net_out: (tx as f64 / dt) as u64,
         ping: (ping >= -1).then_some(ping),
@@ -118,6 +121,7 @@ fn ensure_background() {
     }
     std::thread::spawn(|| {
         let mut nvsmi = true;
+        let mut acpi = core::is_admin();
         let mut n = 0u64;
         while core::now_secs().saturating_sub(LAST_REQ.load(Ordering::Relaxed)) < 10 {
             PING.store(ping_ms().unwrap_or(-1), Ordering::Relaxed);
@@ -127,11 +131,35 @@ fn ensure_background() {
                     None => nvsmi = false,
                 }
             }
+            if acpi && n % 5 == 0 {
+                match acpi_temp() {
+                    Some(t) => *CPU_TEMP.lock().unwrap() = Some(t),
+                    None => acpi = false,
+                }
+            }
             n += 1;
             std::thread::sleep(Duration::from_secs(2));
         }
         BG_RUNNING.store(false, Ordering::SeqCst);
     });
+}
+
+/// Hottest ACPI thermal zone in °C. Motherboard-reported and approximate; needs admin.
+fn acpi_temp() -> Option<f32> {
+    let ps = core::windir().join(r"System32\WindowsPowerShell\v1.0\powershell.exe").display().to_string();
+    let (code, out) = core::run(
+        &ps,
+        &["-NoProfile", "-NonInteractive", "-Command", "(Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction Stop).CurrentTemperature"],
+    )
+    .ok()?;
+    if code != 0 {
+        return None;
+    }
+    out.lines()
+        .filter_map(|l| l.trim().parse::<f32>().ok())
+        .map(|tenth_kelvin| tenth_kelvin / 10.0 - 273.15)
+        .filter(|c| (5.0..125.0).contains(c))
+        .reduce(f32::max)
 }
 
 fn nvidia_smi() -> Option<GpuExtra> {

@@ -2,6 +2,8 @@
 //! Task Manager does it (StartupApproved), so changes are fully reversible.
 
 use crate::core;
+use crate::l10n::{nl, tr};
+use crate::trf;
 use serde::Serialize;
 use std::path::PathBuf;
 
@@ -31,11 +33,11 @@ const APPROVED: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\
 
 fn sources() -> Vec<Source> {
     vec![
-        Source { id: "hkcu", machine: false, run_key: Some("Software\\Microsoft\\Windows\\CurrentVersion\\Run"), folder: None, approved: "Run", label: "You" },
-        Source { id: "hklm", machine: true, run_key: Some("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run"), folder: None, approved: "Run", label: "All users" },
-        Source { id: "hklm32", machine: true, run_key: Some("SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run"), folder: None, approved: "Run32", label: "All users" },
-        Source { id: "userfolder", machine: false, run_key: None, folder: Some(core::roaming().join(r"Microsoft\Windows\Start Menu\Programs\Startup")), approved: "StartupFolder", label: "You" },
-        Source { id: "commonfolder", machine: true, run_key: None, folder: Some(core::program_data().join(r"Microsoft\Windows\Start Menu\Programs\StartUp")), approved: "StartupFolder", label: "All users" },
+        Source { id: "hkcu", machine: false, run_key: Some("Software\\Microsoft\\Windows\\CurrentVersion\\Run"), folder: None, approved: "Run", label: "user" },
+        Source { id: "hklm", machine: true, run_key: Some("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run"), folder: None, approved: "Run", label: "machine" },
+        Source { id: "hklm32", machine: true, run_key: Some("SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run"), folder: None, approved: "Run32", label: "machine" },
+        Source { id: "userfolder", machine: false, run_key: None, folder: Some(core::roaming().join(r"Microsoft\Windows\Start Menu\Programs\Startup")), approved: "StartupFolder", label: "user" },
+        Source { id: "commonfolder", machine: true, run_key: None, folder: Some(core::program_data().join(r"Microsoft\Windows\Start Menu\Programs\StartUp")), approved: "StartupFolder", label: "machine" },
     ]
 }
 
@@ -88,10 +90,45 @@ fn advise(name: &str, command: &str) -> (String, String, String) {
     let hay = format!("{} {}", name.to_lowercase(), command.to_lowercase());
     for (k, friendly, a, t) in KNOWN {
         if hay.contains(k) {
-            return (friendly.to_string(), a.to_string(), t.to_string());
+            return (friendly.to_string(), a.to_string(), localize(t).to_string());
         }
     }
     (name.to_string(), "unknown".into(), String::new())
+}
+
+fn localize(en: &'static str) -> &'static str {
+    if !nl() {
+        return en;
+    }
+    match en {
+        "Protects your PC. Keep it on." => "Beschermt je pc. Laat aan.",
+        "Opens by itself when you launch a game." => "Opent vanzelf als je een game start.",
+        "Open it when you want to play." => "Open het wanneer je wilt spelen.",
+        "Vanguard anti-cheat may want this for Valorant." => "Vanguard-anticheat kan dit nodig hebben voor Valorant.",
+        "Disable if you only use Discord while gaming." => "Uitzetten als je Discord alleen tijdens het gamen gebruikt.",
+        "Opens fast enough when you need it." => "Opent snel genoeg wanneer je het nodig hebt.",
+        "Keeps files synced. Disable if you don't use OneDrive." => "Houdt bestanden gesynchroniseerd. Uitzetten als je OneDrive niet gebruikt.",
+        "Uses RAM in the background." => "Gebruikt RAM op de achtergrond.",
+        "Keeps files synced." => "Houdt bestanden gesynchroniseerd.",
+        "Updaters and sync helpers you rarely need." => "Updaters en synchronisatiehulpjes die je zelden nodig hebt.",
+        "Not needed at startup." => "Niet nodig bij het opstarten.",
+        "Graphics driver helper. Keep it on." => "Hulpprogramma van de videodriver. Laat aan.",
+        "Driver helper. Keep it on." => "Hulpprogramma van een driver. Laat aan.",
+        "Audio driver. Keep it on." => "Audiodriver. Laat aan.",
+        "Keep it if you use RGB lighting or macros." => "Laat aan als je RGB-verlichting of macro's gebruikt.",
+        "Keep it if you use RGB lighting, DPI or macros." => "Laat aan als je RGB-verlichting, DPI of macro's gebruikt.",
+        "Keep it if you use RGB lighting or fan control." => "Laat aan als je RGB-verlichting of fanbesturing gebruikt.",
+        "Keep it if you use device settings or RGB." => "Laat aan als je apparaatinstellingen of RGB gebruikt.",
+        "Keep it if you use fan curves or an overclock." => "Laat aan als je fancurves of een overklok gebruikt.",
+        "Keep it for FPS overlays and frame limiting." => "Laat aan voor FPS-overlays en framelimieten.",
+        "Pauses during games, but still uses some RAM." => "Pauzeert tijdens games, maar gebruikt nog wat RAM.",
+        "Open it when you stream or record." => "Open het wanneer je streamt of opneemt.",
+        "Keep it if you clip with Medal." => "Laat aan als je clips maakt met Medal.",
+        "Uses RAM and can cost FPS." => "Gebruikt RAM en kan FPS kosten.",
+        "Startup boost keeps Edge in RAM." => "Opstartboost houdt Edge in het RAM.",
+        "Keeps Chrome up to date." => "Houdt Chrome up-to-date.",
+        other => other,
+    }
 }
 
 #[cfg(windows)]
@@ -161,14 +198,18 @@ mod imp {
         let src = sources().into_iter().find(|s| s.id == sid).ok_or("Unknown source")?;
         // Only toggle entries that really exist.
         if !list().iter().any(|i| i.id == id) {
-            return Err("That startup item no longer exists.".into());
+            return Err(tr("That startup item no longer exists.", "Dat opstartitem bestaat niet meer.").into());
         }
         if src.machine && !core::is_admin() {
-            return Err("This one is set for all users. Restart WinCleaner as admin to change it.".into());
+            return Err(tr(
+                "This one is set for all users. Restart WinCleaner as admin to change it.",
+                "Deze geldt voor alle gebruikers. Start WinCleaner opnieuw als beheerder om dit te wijzigen.",
+            )
+            .into());
         }
         let (key, _) = hive(src.machine)
             .create_subkey(format!("{APPROVED}{}", src.approved))
-            .map_err(|e| format!("Couldn't open the startup settings: {e}"))?;
+            .map_err(|e| trf!("Couldn't open the startup settings: {}", "Kon de opstartinstellingen niet openen: {}", e))?;
         let mut bytes = vec![0u8; 12];
         if enabled {
             bytes[0] = 0x02;
@@ -178,7 +219,7 @@ mod imp {
             bytes[4..12].copy_from_slice(&ft.to_le_bytes());
         }
         key.set_raw_value(name, &RegValue { vtype: REG_BINARY, bytes: bytes.into() })
-            .map_err(|e| format!("Couldn't change it: {e}"))
+            .map_err(|e| trf!("Couldn't change it: {}", "Kon het niet wijzigen: {}", e))
     }
 }
 

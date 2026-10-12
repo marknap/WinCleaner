@@ -1,7 +1,7 @@
 //! Shared plumbing: paths, safety rules, removal, progress reporting and Windows helpers.
 
 use crate::history::HistoryItem;
-use crate::prefs;
+use crate::{diag, l10n, prefs, trf};
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -336,7 +336,8 @@ pub fn remove(reqs: Vec<RemovalRequest>, allowed: &dyn Fn(&Path) -> bool) -> Rem
     let mut out = RemovalOutcome { result: ActionResult::default(), history: vec![] };
     for r in reqs {
         if !allowed(&r.path) || is_excluded(&r.path) {
-            out.result.failed.push(format!("Blocked by safety rules: {}", r.path.display()));
+            diag::warn(format!("Blocked: {}", r.path.display()));
+            out.result.failed.push(trf!("Blocked by safety rules: {}", "Geblokkeerd door veiligheidsregels: {}", r.path.display()));
             continue;
         }
         if r.permanent {
@@ -354,11 +355,57 @@ pub fn remove(reqs: Vec<RemovalRequest>, allowed: &dyn Fn(&Path) -> bool) -> Rem
                     out.result.removed += 1;
                     out.history.push(HistoryItem::new(&r.path, r.size, true));
                 }
-                Err(e) => out.result.failed.push(format!("{}: {e}", r.path.display())),
+                Err(e) => {
+                    diag::warn(format!("Recycle failed for {}: {e}", r.path.display()));
+                    out.result.failed.push(format!("{}: {e}", r.path.display()))
+                }
             }
         }
     }
     out
+}
+
+pub fn summary(r: &ActionResult) -> String {
+    let mut s = if r.freed > 0 {
+        trf!("GG! Freed {}", "GG! {} vrijgemaakt", format_bytes(r.freed))
+    } else {
+        l10n::tr("Nothing needed removing", "Er hoefde niets weg").to_string()
+    };
+    if r.skipped > 0 {
+        s.push_str(&trf!(" · {} files in use were skipped", " · {} bestanden in gebruik overgeslagen", r.skipped));
+    }
+    if !r.failed.is_empty() {
+        s.push_str(&trf!(" · {} couldn't be removed", " · {} konden niet worden verwijderd", r.failed.len()));
+    }
+    s
+}
+
+/// System Restore point. Windows itself allows one per 24 hours, so we don't try more often
+/// unless `force` is set (the manual button).
+pub fn restore_point(force: bool) -> Result<String, String> {
+    let p = prefs::get();
+    if !force && (!p.restore_points || now_secs().saturating_sub(p.last_restore_point) < 86_400) {
+        return Ok(String::new());
+    }
+    if !is_admin() {
+        return Err(l10n::tr("Restore points need admin rights.", "Herstelpunten hebben beheerdersrechten nodig.").into());
+    }
+    let ps = windir().join(r"System32\WindowsPowerShell\v1.0\powershell.exe").display().to_string();
+    let (code, out) = run(
+        &ps,
+        &["-NoProfile", "-NonInteractive", "-Command", "Checkpoint-Computer -Description 'WinCleaner for Gamers' -RestorePointType MODIFY_SETTINGS -ErrorAction Stop"],
+    )?;
+    if code != 0 {
+        diag::warn(format!("Restore point failed: {}", out.trim()));
+        return Err(l10n::tr(
+            "Couldn't create a restore point. System Protection may be turned off for drive C:.",
+            "Kon geen herstelpunt maken. Systeembeveiliging staat mogelijk uit voor station C:.",
+        )
+        .into());
+    }
+    prefs::update(|p| p.last_restore_point = now_secs());
+    diag::info("Created restore point");
+    Ok(l10n::tr("Restore point created", "Herstelpunt gemaakt").into())
 }
 
 /// Best-effort permanent delete: removes everything not locked by a running
@@ -422,7 +469,7 @@ pub fn run(exe: &str, args: &[&str]) -> Result<(i32, String), String> {
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     }
-    let out = cmd.output().map_err(|e| format!("Couldn't start {exe}: {e}"))?;
+    let out = cmd.output().map_err(|e| trf!("Couldn't start {}: {}", "Kon {} niet starten: {}", exe, e))?;
     let mut text = String::from_utf8_lossy(&out.stdout).into_owned();
     text.push_str(&String::from_utf8_lossy(&out.stderr));
     Ok((out.status.code().unwrap_or(-1), text))
@@ -459,7 +506,11 @@ pub fn shell_execute(verb: &str, file: &str, params: &str, wait: bool) -> Result
         info.nShow = SW_SHOWNORMAL;
         if ShellExecuteExW(&mut info) == 0 {
             let err = GetLastError();
-            return Err(if err == 1223 { "Cancelled at the Windows permission prompt.".into() } else { format!("Windows error {err}") });
+            return Err(if err == 1223 {
+                l10n::tr("Cancelled at the Windows permission prompt.", "Geannuleerd bij de Windows-toestemmingsvraag.").into()
+            } else {
+                trf!("Windows error {}", "Windows-fout {}", err)
+            });
         }
         if info.hProcess.is_null() {
             return Ok(None);
@@ -487,4 +538,88 @@ pub fn running_processes() -> std::collections::HashSet<String> {
     let mut sys = System::new();
     sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
     sys.processes().values().map(|p| p.name().to_string_lossy().to_lowercase()).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tmp(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("wincleaner-test-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn inside_rules() {
+        let root = tmp("inside");
+        let child = root.join("a");
+        let grand = child.join("b");
+        fs::create_dir_all(&grand).unwrap();
+        assert!(strictly_inside(&child, &root));
+        assert!(strictly_inside(&grand, &root));
+        assert!(!strictly_inside(&root, &root));
+        assert!(inside_or_equal(&root, &root));
+        assert!(direct_child(&child, &root));
+        assert!(!direct_child(&grand, &root));
+        // A sibling whose name starts with the root's name is not inside it.
+        let sibling = PathBuf::from(format!("{}-other", root.display()));
+        fs::create_dir_all(&sibling).unwrap();
+        assert!(!strictly_inside(&sibling, &root));
+        let _ = fs::remove_dir_all(&sibling);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn case_insensitive_paths() {
+        assert_eq!(key(Path::new(r"C:\Users\Me\")), key(Path::new("c:/users/me")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn links_are_not_followed() {
+        let root = tmp("links");
+        let outside = tmp("links-target");
+        fs::write(outside.join("precious.txt"), b"keep me").unwrap();
+        let link = root.join("link");
+        std::os::unix::fs::symlink(&outside, &link).unwrap();
+        // The link is judged by where it lives, not where it points.
+        assert!(direct_child(&link, &root));
+        let (freed, _) = delete_tree(&link);
+        assert_eq!(freed, 0);
+        assert!(!link.exists());
+        assert!(outside.join("precious.txt").exists());
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&outside);
+    }
+
+    #[test]
+    fn delete_tree_counts_bytes() {
+        let root = tmp("delete");
+        fs::create_dir_all(root.join("x/y")).unwrap();
+        fs::write(root.join("x/y/f.bin"), vec![0u8; 1000]).unwrap();
+        fs::write(root.join("x/g.bin"), vec![0u8; 24]).unwrap();
+        let (freed, locked) = delete_tree(&root.join("x"));
+        assert_eq!((freed, locked), (1024, 0));
+        assert!(!root.join("x").exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn measure_sizes() {
+        let root = tmp("measure");
+        fs::write(root.join("a"), vec![0u8; 10]).unwrap();
+        fs::create_dir_all(root.join("d")).unwrap();
+        fs::write(root.join("d/b"), vec![0u8; 5]).unwrap();
+        assert_eq!(measure(&root, None).size, 15);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn bytes_format() {
+        assert_eq!(format_bytes(512), "512 B");
+        assert_eq!(format_bytes(1536), "1.5 KB");
+        assert_eq!(format_bytes(5 * 1024 * 1024 * 1024), "5.0 GB");
+    }
 }

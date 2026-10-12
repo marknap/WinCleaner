@@ -606,6 +606,68 @@ tr:hover td { background: rgba(255, 255, 255, 0.02); }
 .excl-list .icon { color: var(--amber); }
 .row-actions { display: flex; gap: 8px; }
 
+/* ------------------------------------------------------------------ v0.2 additions */
+
+.update-pill {
+  display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; padding: 3px 10px; border-radius: 99px;
+  font: 600 11px var(--display); color: #07080f; background: linear-gradient(90deg, var(--lime), var(--cyan));
+  box-shadow: 0 0 14px rgba(57, 255, 136, 0.5); animation: breathe 3s infinite;
+}
+.update-pill:disabled { opacity: 0.8; }
+
+.modal-backdrop { position: fixed; inset: 0; z-index: 70; background: rgba(4, 5, 12, 0.7); backdrop-filter: blur(6px); display: grid; place-items: center; animation: rise 0.2s ease both; }
+.modal { width: min(520px, 92vw); background: var(--panel-solid); border: 1px solid var(--line-strong); border-radius: 18px; padding: 22px; box-shadow: 0 30px 80px -20px rgba(0, 240, 255, 0.35); display: flex; flex-direction: column; gap: 14px; }
+.modal-head { display: flex; align-items: center; gap: 10px; }
+.modal-head .icon { color: var(--cyan); }
+.modal-head h2 { font-size: 20px; }
+.modal-body { display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+
+.pin { margin-left: auto; color: var(--muted); opacity: 0.35; padding: 2px; border-radius: 6px; transition: opacity 0.2s, color 0.2s; }
+.meter:hover .pin { opacity: 1; }
+.pin:hover { color: var(--text); }
+.pin.on { opacity: 1; color: var(--cyan); filter: drop-shadow(0 0 6px var(--cyan)); }
+.meter.pinned { border-color: rgba(0, 240, 255, 0.3); }
+
+.perf-grid { grid-auto-flow: dense; }
+.perf-grid .wide { grid-column: span 2; }
+.perf-grid .full { grid-column: 1 / -1; }
+.regions { display: flex; flex-direction: column; gap: 6px; }
+.region { display: grid; grid-template-columns: 1.4fr 1fr 64px auto; gap: 10px; align-items: center; font-size: 12px; }
+.region b { text-align: right; }
+.regions-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 4px; }
+.bench, .bench-setup { display: flex; flex-direction: column; gap: 10px; }
+.bench-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.bench-controls select { flex: 1; min-width: 160px; }
+.bench-result { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.bench-result div { display: flex; flex-direction: column; padding: 8px 10px; border-radius: 10px; background: rgba(0, 0, 0, 0.25); }
+.bench-result b { font: 700 22px var(--display); }
+.bench-result span { font-size: 11px; color: var(--muted); }
+
+.planner { display: flex; flex-direction: column; gap: 6px; }
+.planner-head { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 4px; }
+.planner-head .icon { color: var(--cyan); margin-top: 2px; }
+.move-row { border-radius: 8px; }
+.move-row summary { display: grid; grid-template-columns: 10px 1fr auto 80px auto; gap: 10px; align-items: center; padding: 6px 4px; cursor: pointer; list-style: none; }
+.move-row summary::-webkit-details-marker { display: none; }
+.move-row summary:hover { background: rgba(255, 255, 255, 0.03); }
+.move-row p { padding: 4px 24px 10px; }
+.game-launcher-dot { width: 8px; height: 8px; border-radius: 50%; }
+.clips { display: flex; align-items: center; gap: 14px; }
+.clips > .icon { color: var(--violet); }
+.clips > div { flex: 1; }
+
+.streak b { color: #ff8a3d; display: inline-flex; align-items: center; gap: 4px; }
+.achievements { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.ach { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); opacity: 0.45; filter: grayscale(0.8); transition: all 0.2s; }
+.ach.got { opacity: 1; filter: none; border-color: color-mix(in srgb, var(--c) 40%, transparent); }
+.ach-icon { width: 38px; height: 38px; flex-shrink: 0; border-radius: 10px; display: grid; place-items: center; color: var(--c); background: color-mix(in srgb, var(--c) 12%, transparent); }
+.ach.got .ach-icon { box-shadow: inset 0 0 0 1px var(--c), 0 0 16px -4px var(--c); }
+.ach b { font: 600 14px var(--display); }
+.ach p { font-size: 11px; color: var(--muted); }
+
+.settings h4.sub { font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-top: 12px; }
+
 @media (max-width: 1180px) {
   .hero { grid-template-columns: 1fr; }
   .hero-side { flex-direction: row; }

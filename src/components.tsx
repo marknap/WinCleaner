@@ -1,5 +1,6 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
-import { bytes, cx } from "./util";
+import { bytes, cx, num } from "./util";
+import { L } from "./i18n";
 import type { Progress } from "./api";
 
 // ---------------------------------------------------------------------------
@@ -50,6 +51,15 @@ const P: Record<string, string> = {
   maximize: "M5 5h14v14H5z",
   plus: "M12 5v14 M5 12h14",
   clock: "M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0 M12 7v5l3 2",
+  flame: "M12 3c1 4 5 5.5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-4 2.5-5 0 2 1 3 2 3 0-3-1-5.5.5-8z",
+  pin: "M9 4h6l-1 6 3 3H7l3-3z M12 13v7",
+  globe: "M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0 M3 12h18 M12 3a14 14 0 0 1 0 18 M12 3a14 14 0 0 0 0 18",
+  download: "M12 4v11 M7 10l5 5 5-5 M5 20h14",
+  upload: "M12 20V9 M7 14l5-5 5 5 M5 4h14",
+  thermo: "M10 14V5a2 2 0 1 1 4 0v9a4 4 0 1 1-4 0z M12 10v6",
+  video: "M3 6h13v12H3z M16 10l5-3v10l-5-3",
+  truck: "M3 6h11v10H3z M14 10h4l3 3v3h-7 M7 19a1.5 1.5 0 1 0 0-.01 M17 19a1.5 1.5 0 1 0 0-.01",
+  key: "M8 15a4 4 0 1 1 3-6.5L20 8v4h-3v3h-3l-2.6-1.6A4 4 0 0 1 8 15z",
 };
 
 export type IconName = keyof typeof P;
@@ -135,13 +145,13 @@ export function Disclosure({ title, children, defaultOpen = false, count }: { ti
   );
 }
 
-export function Search({ value, onChange, placeholder = "Search" }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+export function Search({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
     <label className="search">
       <Icon name="search" size={16} />
-      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} spellCheck={false} />
+      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder ?? L("Search", "Zoeken")} spellCheck={false} />
       {value && (
-        <button onClick={() => onChange("")} aria-label="Clear">
+        <button onClick={() => onChange("")} aria-label={L("Clear", "Wissen")}>
           <Icon name="x" size={14} />
         </button>
       )}
@@ -204,21 +214,21 @@ export function ScanProgress({ progress, onCancel, title }: { progress: Progress
         <div className="blip b2" />
         <div className="blip b3" />
       </div>
-      <h2>{progress?.phase || title || "Scanning"}</h2>
+      <h2>{progress?.phase || title || L("Scanning", "Scannen")}</h2>
       <p className="mono path">{progress?.current || "\u00a0"}</p>
       <div className="scan-stats">
         <div>
           <b>{bytes(progress?.bytes ?? 0)}</b>
-          <span>scanned</span>
+          <span>{L("scanned", "gescand")}</span>
         </div>
         <div>
-          <b>{(progress?.items ?? 0).toLocaleString()}</b>
-          <span>files</span>
+          <b>{num(progress?.items ?? 0)}</b>
+          <span>{L("files", "bestanden")}</span>
         </div>
       </div>
       {onCancel && (
         <Button icon="x" onClick={onCancel}>
-          Cancel
+          {L("Cancel", "Annuleren")}
         </Button>
       )}
     </div>
@@ -332,7 +342,7 @@ export function Bar({ value, color = "var(--cyan)" }: { value: number; color?: s
 }
 
 /** Animated number that eases toward its target. */
-export function CountUp({ value, format = (v: number) => Math.round(v).toLocaleString() }: { value: number; format?: (v: number) => string }) {
+export function CountUp({ value, format = (v: number) => num(Math.round(v)) }: { value: number; format?: (v: number) => string }) {
   const [shown, setShown] = useState(value);
   const from = useRef(value);
   useEffect(() => {
@@ -351,6 +361,43 @@ export function CountUp({ value, format = (v: number) => Math.round(v).toLocaleS
     return () => cancelAnimationFrame(raf);
   }, [value]);
   return <>{format(shown)}</>;
+}
+
+export interface ModalButton { id: string; label: string; kind?: "primary" | "ghost" | "danger" | "subtle" }
+
+export function Modal({ title, icon = "info", children, buttons, onClose }: {
+  title: string; icon?: IconName; children: ReactNode; buttons: ModalButton[]; onClose: (id: string | null) => void;
+}) {
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => e.key === "Escape" && onClose(null);
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [onClose]);
+  return (
+    <div className="modal-backdrop" onClick={() => onClose(null)}>
+      <div className="modal" role="dialog" aria-modal onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <Icon name={icon} size={22} />
+          <h2>{title}</h2>
+        </div>
+        <div className="modal-body">{children}</div>
+        <div className="modal-actions">
+          {buttons.map((b) => (
+            <Button key={b.id} kind={b.kind ?? "ghost"} onClick={() => onClose(b.id)}>{b.label}</Button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Small pin toggle used on Performance cards. */
+export function PinButton({ pinned, onToggle }: { pinned: boolean; onToggle: () => void }) {
+  return (
+    <button className={cx("pin", pinned && "on")} onClick={onToggle} title={pinned ? L("Unpin", "Losmaken") : L("Pin to top", "Bovenaan vastzetten")}>
+      <Icon name="pin" size={14} />
+    </button>
+  );
 }
 
 /** Confetti-like burst for wins. */

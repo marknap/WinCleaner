@@ -3,13 +3,14 @@ import { invoke } from "../api";
 import type { ActionResult, CleanGroup } from "../api";
 import { ActionBar, Badge, Banner, Button, Check, Donut, EmptyStart, Icon, ScanProgress, Search, ToolHeader } from "../components";
 import { defaultSelection, itemKey, selectedTargets, useStore } from "../store";
-import { bytes, cx } from "../util";
+import { L } from "../i18n";
+import { bytes, cx, num } from "../util";
 
-const GROUPS: { id: CleanGroup["group"]; label: string; color: string }[] = [
-  { id: "gaming", label: "Gaming", color: "#ff2bd6" },
-  { id: "windows", label: "Windows", color: "#00f0ff" },
-  { id: "browsers", label: "Browsers", color: "#ffc93c" },
-  { id: "developer", label: "Developer", color: "#39ff88" },
+const GROUPS: { id: CleanGroup["group"]; label: () => string; color: string }[] = [
+  { id: "gaming", label: () => "Gaming", color: "#ff2bd6" },
+  { id: "windows", label: () => "Windows", color: "#00f0ff" },
+  { id: "browsers", label: () => "Browsers", color: "#ffc93c" },
+  { id: "developer", label: () => L("Developer", "Ontwikkelaar"), color: "#39ff88" },
 ];
 
 export default function Clean() {
@@ -34,9 +35,11 @@ export default function Clean() {
 
   async function clean() {
     if (!groups) return;
+    const targets = selectedTargets(groups, selected);
+    if (!(await s.confirmPermanent(targets))) return;
     setCleaning(true);
     try {
-      const r = await invoke<ActionResult>("clean_run", { targets: selectedTargets(groups, selected), tool: "Clean" });
+      const r = await invoke<ActionResult>("clean_run", { targets, tool: "clean" });
       s.toast(r.message, r.failed.length ? "info" : "ok");
       if (r.freed > 0) s.celebrate();
       s.refreshHistory();
@@ -86,38 +89,44 @@ export default function Clean() {
 
   return (
     <div className="page">
-      <ToolHeader icon="sparkle" title="Clean" color="#39ff88" subtitle="Clear junk from Windows, launchers, browsers and your GPU.">
-        {groups && !scanning && <Button icon="refresh" onClick={scan}>Rescan</Button>}
+      <ToolHeader icon="sparkle" title={L("Clean", "Opschonen")} color="#39ff88" subtitle={L("Clear junk from Windows, launchers, browsers and your GPU.", "Ruim rommel op uit Windows, launchers, browsers en je GPU.")}>
+        {groups && !scanning && <Button icon="refresh" onClick={scan}>{L("Rescan", "Opnieuw scannen")}</Button>}
       </ToolHeader>
 
       {scanning ? (
         <ScanProgress progress={s.progress} onCancel={() => invoke("cancel_job")} />
       ) : !groups ? (
-        <EmptyStart icon="sparkle" color="#39ff88" title="Find junk to clear" text="Temp files, launcher caches, crash dumps, old driver installers and more. Nothing personal is touched." action="Scan for junk" onAction={scan} />
+        <EmptyStart
+          icon="sparkle" color="#39ff88" title={L("Find junk to clear", "Zoek rommel om op te ruimen")}
+          text={L("Temp files, launcher caches, crash dumps, old driver installers and more. Nothing personal is touched.", "Tijdelijke bestanden, launcher-caches, crashdumps, oude driverinstallaties en meer. Niets persoonlijks wordt aangeraakt.")}
+          action={L("Scan for junk", "Scan op rommel")} onAction={scan}
+        />
       ) : (
         <>
           {s.info && !s.info.isAdmin && groups.some((g) => g.locked) && (
-            <Banner tone="cyan" icon="lock" action={<Button small icon="shield" onClick={s.restartAdmin}>Restart as admin</Button>}>
-              A few system categories are locked. Restart as admin to clean them too.
+            <Banner tone="cyan" icon="lock" action={<Button small icon="shield" onClick={s.restartAdmin}>{L("Restart as admin", "Herstart als beheerder")}</Button>}>
+              {L("A few system categories are locked. Restart as admin to clean them too.", "Een paar systeemcategorieën zijn vergrendeld. Herstart als beheerder om die ook op te schonen.")}
             </Banner>
           )}
           <div className="clean-layout">
             <div className="clean-summary">
               <Donut size={220} parts={GROUPS.map((g) => ({ value: totals[g.id]?.sel ?? 0, color: g.color }))}>
                 <span className="donut-big">{bytes(selBytes)}</span>
-                <span className="muted small">selected</span>
+                <span className="muted small">{L("selected", "geselecteerd")}</span>
               </Donut>
               <ul className="legend">
                 {GROUPS.filter((g) => g.id !== "developer" || showDev).map((g) => (
                   <li key={g.id}>
                     <i style={{ background: g.color, boxShadow: `0 0 8px ${g.color}` }} />
-                    <span>{g.label}</span>
+                    <span>{g.label()}</span>
                     <b>{bytes(totals[g.id]?.sel ?? 0)}</b>
                   </li>
                 ))}
               </ul>
               <p className="muted small center">
-                Cleaned caches are {s.prefs?.cleanToRecycleBin ? "sent to the Recycle Bin" : "deleted right away to free space"}. Change this in Settings.
+                {s.prefs?.cleanToRecycleBin
+                  ? L("Cleaned caches go to the Recycle Bin. Change this in Settings.", "Opgeschoonde caches gaan naar de Prullenbak. Wijzig dit in Instellingen.")
+                  : L("Cleaned caches are deleted right away to free space. Change this in Settings.", "Opgeschoonde caches worden direct verwijderd om ruimte vrij te maken. Wijzig dit in Instellingen.")}
               </p>
             </div>
 
@@ -127,7 +136,7 @@ export default function Clean() {
                 if (!list.length) return null;
                 return (
                   <section key={gr.id} className="cat-section">
-                    <h4 style={{ color: gr.color }}>{gr.label}</h4>
+                    <h4 style={{ color: gr.color }}>{gr.label()}</h4>
                     {list.map((g) => {
                       const keys = g.items.map((i) => itemKey(g.id, i.path));
                       const n = keys.filter((k) => selected.has(k)).length;
@@ -141,9 +150,9 @@ export default function Clean() {
                             <div className="cat-text">
                               <div className="cat-name">
                                 {g.name}
-                                {g.locked && <Badge icon="lock" tone="cyan">Admin</Badge>}
-                                {g.inUse && <Badge tone="amber">App running</Badge>}
-                                {!g.defaultSelected && <Badge tone="pink">Optional</Badge>}
+                                {g.locked && <Badge icon="lock" tone="cyan">{L("Admin", "Beheerder")}</Badge>}
+                                {g.inUse && <Badge tone="amber">{L("App running", "App draait")}</Badge>}
+                                {!g.defaultSelected && <Badge tone="pink">{L("Optional", "Optioneel")}</Badge>}
                               </div>
                               <p>{g.detail}</p>
                               {g.warning && <p className="warn"><Icon name="info" size={13} /> {g.warning}</p>}
@@ -153,17 +162,17 @@ export default function Clean() {
                           </div>
                           {isOpen && (
                             <div className="cat-items">
-                              {g.items.length > 8 && <Search value={filter} onChange={setFilter} placeholder="Filter files" />}
-                              {g.inUse && <p className="warn small"><Icon name="alert" size={13} /> Close the app first to clean these safely. They're unticked for you.</p>}
+                              {g.items.length > 8 && <Search value={filter} onChange={setFilter} placeholder={L("Filter files", "Bestanden filteren")} />}
+                              {g.inUse && <p className="warn small"><Icon name="alert" size={13} /> {L("Close the app first to clean these safely. They're unticked for you.", "Sluit eerst de app om dit veilig op te schonen. Ze zijn alvast uitgevinkt.")}</p>}
                               {items.slice(0, 300).map((i) => (
                                 <div key={i.path} className="item-row">
                                   <Check state={selected.has(itemKey(g.id, i.path))} onChange={(v) => setItem(g, i.path, v)} />
-                                  <span className="mono ellipsis" title={i.path}>{i.path === "::recyclebin" ? `Recycle Bin (${i.name})` : i.path}</span>
-                                  {i.inUse && <Badge tone="amber">In use</Badge>}
+                                  <span className="mono ellipsis" title={i.path}>{i.path === "::recyclebin" ? `${L("Recycle Bin", "Prullenbak")} (${i.name})` : i.path}</span>
+                                  {i.inUse && <Badge tone="amber">{L("In use", "In gebruik")}</Badge>}
                                   <b className="mono">{bytes(i.size)}</b>
                                 </div>
                               ))}
-                              {items.length > 300 && <p className="muted small">+ {items.length - 300} more</p>}
+                              {items.length > 300 && <p className="muted small">+ {num(items.length - 300)} {L("more", "meer")}</p>}
                             </div>
                           )}
                         </div>
@@ -174,9 +183,9 @@ export default function Clean() {
               })}
             </div>
           </div>
-          <ActionBar note={selCount ? `${selCount.toLocaleString()} items selected` : "Pick what to clean"}>
+          <ActionBar note={selCount ? L(`${num(selCount)} items selected`, `${num(selCount)} items geselecteerd`) : L("Pick what to clean", "Kies wat je wilt opschonen")}>
             <Button kind="primary" icon="sparkle" disabled={!selCount || cleaning} onClick={clean}>
-              {cleaning ? "Cleaning..." : `Clean ${bytes(selBytes)}`}
+              {cleaning ? L("Cleaning...", "Opschonen...") : L(`Clean ${bytes(selBytes)}`, `${bytes(selBytes)} opschonen`)}
             </Button>
           </ActionBar>
         </>

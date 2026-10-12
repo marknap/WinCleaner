@@ -1,22 +1,30 @@
-import { createContext, useContext } from "react";
+import { createContext, ReactNode, useContext } from "react";
 import type { CleanGroup, CleanTarget, HistoryFile, Prefs, Progress, SysInfo } from "./api";
+import type { IconName, ModalButton } from "./components";
 
 export type Page =
   | "home" | "clean" | "boost" | "games" | "startup" | "performance"
   | "bigfiles" | "duplicates" | "uninstaller" | "diskmap" | "history" | "settings";
 
+export interface AskOptions { title: string; body: ReactNode; icon?: IconName; buttons: ModalButton[] }
+
 export interface Store {
   info: SysInfo | null;
+  refreshInfo: () => void;
   prefs: Prefs | null;
   savePrefs: (p: Partial<Prefs>) => Promise<void>;
   page: Page;
-  go: (p: Page) => void;
+  go: (p: Page, opts?: { bigFilesMode?: string }) => void;
   toast: (msg: string, kind?: "ok" | "err" | "info") => void;
   progress: Progress | null;
   history: HistoryFile | null;
   refreshHistory: () => void;
   celebrate: () => void;
   restartAdmin: () => void;
+  ask: (o: AskOptions) => Promise<string | null>;
+  /** First-time explanation before caches are deleted for good. Resolves false if cancelled. */
+  confirmPermanent: (targets: CleanTarget[]) => Promise<boolean>;
+  bigFilesMode: string | null;
   clean: {
     groups: CleanGroup[] | null;
     setGroups: (g: CleanGroup[] | null) => void;

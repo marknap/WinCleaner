@@ -3,6 +3,7 @@ import { invoke } from "../api";
 import type { StartupItem } from "../api";
 import { Badge, Banner, Button, Card, Disclosure, Icon, Spinner, Toggle, ToolHeader } from "../components";
 import { useStore } from "../store";
+import { L } from "../i18n";
 import { cx } from "../util";
 
 export default function Startup() {
@@ -20,7 +21,7 @@ export default function Startup() {
     try {
       await invoke("startup_set", { id: it.id, enabled });
       setItems((xs) => xs && xs.map((x) => (x.id === it.id ? { ...x, enabled } : x)));
-      if (!quiet) s.toast(`${it.name} ${enabled ? "will start with Windows" : "won't start with Windows anymore"}`);
+      if (!quiet) s.toast(enabled ? L(`${it.name} will start with Windows`, `${it.name} start mee met Windows`) : L(`${it.name} won't start with Windows anymore`, `${it.name} start niet meer mee met Windows`));
     } catch (e) {
       s.toast(String(e), "err");
     }
@@ -30,8 +31,9 @@ export default function Startup() {
   async function disableRecommended() {
     const list = (items ?? []).filter((x) => x.enabled && x.advice === "disable" && (!x.needsAdmin || s.info?.isAdmin));
     for (const it of list) await set(it, false, true);
-    s.toast(`Disabled ${list.length} startup apps. Faster boot unlocked!`);
+    s.toast(L(`Disabled ${list.length} startup apps. Faster boot unlocked!`, `${list.length} opstartapps uitgezet. Sneller opstarten ontgrendeld!`));
     if (list.length) s.celebrate();
+    s.refreshHistory();
   }
 
   const admin = s.info?.isAdmin ?? false;
@@ -42,8 +44,8 @@ export default function Startup() {
 
   return (
     <div className="page">
-      <ToolHeader icon="power" title="Startup" color="#7aa8ff" subtitle={items ? `${enabledCount} apps start with Windows` : "Apps that launch when you sign in"}>
-        <Button icon="external" onClick={() => invoke("open_settings", { page: "startupapps" })}>Windows settings</Button>
+      <ToolHeader icon="power" title={L("Startup", "Opstarten")} color="#7aa8ff" subtitle={items ? L(`${enabledCount} apps start with Windows`, `${enabledCount} apps starten mee met Windows`) : L("Apps that launch when you sign in", "Apps die starten als je inlogt")}>
+        <Button icon="external" onClick={() => invoke("open_settings", { page: "startupapps" })}>{L("Windows settings", "Windows-instellingen")}</Button>
       </ToolHeader>
 
       {!items ? (
@@ -51,26 +53,26 @@ export default function Startup() {
       ) : (
         <>
           <Banner tone="cyan" icon="info">
-            Disabling only stops an app from launching at sign-in. Nothing is uninstalled, and you can switch it back anytime.
+            {L("Disabling only stops an app from launching at sign-in. Nothing is uninstalled, and you can switch it back anytime.", "Uitzetten voorkomt alleen dat een app start bij het inloggen. Er wordt niets verwijderd en je kunt het altijd terugzetten.")}
           </Banner>
 
           {recommended.length > 0 && (
             <Card className="startup-hero" glow="#7aa8ff">
               <div>
-                <h3>{recommended.length} apps slow down your boot</h3>
-                <p className="muted">Launchers and chat apps open fine when you need them.</p>
+                <h3>{L(`${recommended.length} apps slow down your boot`, `${recommended.length} apps vertragen je opstart`)}</h3>
+                <p className="muted">{L("Launchers and chat apps open fine when you need them.", "Launchers en chatapps openen prima wanneer je ze nodig hebt.")}</p>
               </div>
-              <Button kind="primary" icon="bolt" onClick={disableRecommended}>Disable all {recommended.length}</Button>
+              <Button kind="primary" icon="bolt" onClick={disableRecommended}>{L(`Disable all ${recommended.length}`, `Alle ${recommended.length} uitzetten`)}</Button>
             </Card>
           )}
 
-          <List title="Safe to disable" tone="lime" items={recommended} busy={busy} admin={admin} onSet={set} />
-          <List title="Your call" tone="amber" items={optional} busy={busy} admin={admin} onSet={set} />
-          <Disclosure title="Keep these on" count={keep.length}>
+          <List title={L("Safe to disable", "Veilig uit te zetten")} tone="lime" items={recommended} busy={busy} admin={admin} onSet={set} />
+          <List title={L("Your call", "Jij beslist")} tone="amber" items={optional} busy={busy} admin={admin} onSet={set} />
+          <Disclosure title={L("Keep these on", "Laat deze aan")} count={keep.length}>
             <List items={keep} busy={busy} admin={admin} onSet={set} />
           </Disclosure>
           {!admin && (items ?? []).some((x) => x.needsAdmin) && (
-            <p className="muted small"><Icon name="lock" size={13} /> Items for all users need admin. <button className="link" onClick={s.restartAdmin}>Restart as admin</button></p>
+            <p className="muted small"><Icon name="lock" size={13} /> {L("Items for all users need admin.", "Items voor alle gebruikers hebben beheerdersrechten nodig.")} <button className="link" onClick={s.restartAdmin}>{L("Restart as admin", "Herstart als beheerder")}</button></p>
           )}
         </>
       )}
@@ -91,7 +93,7 @@ function List({ title, tone, items, busy, admin, onSet }: {
           <div className="startup-text">
             <div className="startup-name">
               {it.name}
-              {it.needsAdmin && <Badge tone="cyan" icon="shield">All users</Badge>}
+              {it.needsAdmin && <Badge tone="cyan" icon="shield">{L("All users", "Alle gebruikers")}</Badge>}
             </div>
             {it.adviceText && <p>{it.adviceText}</p>}
             <p className="mono muted small ellipsis" title={it.command}>{it.command}</p>

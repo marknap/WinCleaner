@@ -42,7 +42,9 @@ WinCleaner for Gamers is a free app for Windows 10 and 11 that:
 - **Boosts your games.** One button switches your PC to full performance before you play.
 - **Shows where your space went.** See which games are eating your SSD and which ones you haven't touched in months.
 - **Speeds up boot.** Tells you which startup apps you can safely turn off, in plain English.
-- **Shows live stats.** CPU, GPU, RAM, temps and ping while you play.
+- **Live stats.** CPU, GPU, RAM, temps, ping to game server regions and an FPS benchmark.
+- **English and Dutch.** Follows your Windows language, or pick one in Settings.
+- **Keeps itself up to date.** New versions install with one click.
 
 Your game saves are never touched, and anything bigger than a cache goes to the Recycle Bin so you can undo it.
 
@@ -55,6 +57,8 @@ Your game saves are never touched, and anything bigger than a cache goes to the 
 3. **If Windows shows "Windows protected your PC":** click **More info**, then **Run anyway**. You see this because the app isn't code-signed (signing certificates cost money). It isn't a virus warning.
 
 Requirements: Windows 10 or 11, 64-bit. Nothing else to install.
+
+**Updates:** WinCleaner checks for a new version every time it starts. When one is available, a green **Update available** button appears at the top. One click downloads, installs and restarts it. You can also check by hand in **Settings → Updates**.
 
 ---
 
@@ -106,6 +110,8 @@ Junk is grouped into **Gaming**, **Windows**, **Browsers** and **Developer**. Ea
 
 When you're done playing, click **Restore normal mode** to switch back to your old power plan.
 
+As admin, WinCleaner first creates a **Windows restore point** (at most once a day) before boosting or changing gaming settings, so you can always roll back. You can turn this off or create one by hand in **Settings → Safety**.
+
 **Quick fixes** are one-click repairs:
 
 | Fix | Use it when... |
@@ -123,6 +129,9 @@ When you're done playing, click **Restore normal mode** to switch back to your o
 - **Dusty** games haven't been played in 90+ days. They're good candidates to uninstall if you need space.
 - **Leftovers from uninstalled games:** Steam often leaves folders behind after an uninstall, and they can be gigabytes. WinCleaner finds them for you. Check them for mods or old saves first. Anything you remove goes to the Recycle Bin.
 - Each game card has buttons to **play**, **verify/repair files**, **open the game folder** or **uninstall** it through its launcher.
+- **Drive full?** When a drive with games drops below 15% free, WinCleaner suggests which least-played games to move to another drive, and shows how to move each one in its launcher.
+- **Game clips & recordings:** if your Videos folder holds more than 1 GB of Game Bar, ShadowPlay, ReLive or OBS recordings, a card takes you to them so you can keep the best and bin the rest.
+- Battle.net games appear alongside Steam, Epic and GOG.
 
 ### Startup
 
@@ -138,15 +147,24 @@ Apps are sorted into three groups:
 
 | Tool | What it's for |
 |---|---|
-| **Big Files** | Files over 500 MB, files you haven't touched in 6+ months, or old installers sitting in Downloads. |
+| **Big Files** | Files over 500 MB, files you haven't touched in 6+ months, old installers in Downloads, or game clips in Videos. |
 | **Duplicates** | Identical files, compared byte for byte. The newest copy is always kept. |
-| **Uninstaller** | Runs a program's own uninstaller, then finds the folders it left behind. |
+| **Uninstaller** | Runs a program's own uninstaller, then finds the folders **and registry keys** it left behind. Preview leftovers before uninstalling, or re-check programs you removed earlier under **Recently removed**. |
 | **Disk Map** | A visual map of a drive: bigger block = bigger file. Click folders to dive in. |
-| **History** | Everything WinCleaner removed. Use **Put back** to restore items from the Recycle Bin. |
+| **History** | Your rank, achievements, and everything WinCleaner removed. Use **Put back** to restore items. |
 
-### Your rank
+### Performance
+
+- CPU, RAM, GPU and network with live graphs. GPU temperature and VRAM on NVIDIA. CPU temperature (approximate) when running as admin.
+- **Game server regions:** connection time to the cloud regions most online games run in (EU, UK, US, Asia, Oceania). The best one is highlighted.
+- **FPS benchmark:** average FPS plus 1% and 0.1% lows of a running game, using Intel's free [PresentMon](https://github.com/GameTechDev/PresentMon/releases). Download it once, then point WinCleaner to it.
+- **Pin** any card to keep it at the top.
+
+### Your rank and achievements
 
 Freeing space, boosting and scanning earn XP. Climb from **Rookie** through Bronze, Silver, Gold, Platinum and Diamond up to **Legend**.
+
+There are 16 achievements to unlock (First Blood, Startup Slayer, Leftover Hunter, Benchmarker...), and a **week streak** that counts how many weeks in a row you've used WinCleaner.
 
 ---
 
@@ -155,8 +173,9 @@ Freeing space, boosting and scanning earn XP. Climb from **Rookie** through Bron
 Short answer: yes, it was designed to be careful.
 
 - **Your saves are off-limits.** `Saved Games`, `Documents\My Games` and `AppData` are never offered for deletion by the file tools.
-- **Undo is built in.** Big files, duplicates, leftovers and Disk Map deletions go to the **Recycle Bin**. You can put them back from **History**.
-- **Caches are the only thing deleted for good**, because they rebuild themselves. If you'd rather recycle those too, turn on **Send cleaned caches to the Recycle Bin** in Settings.
+- **Undo is built in.** Big files, duplicates, leftovers and Disk Map deletions go to the **Recycle Bin**. Removed registry keys are backed up first. You can put everything back from **History**.
+- **Restore points.** Before Game Boost or gaming-setting changes, a Windows restore point is created (as admin, once a day).
+- **Caches are the only thing deleted for good**, because they rebuild themselves. The first time, WinCleaner explains this and offers to use the Recycle Bin instead. You can switch anytime with **Send cleaned caches to the Recycle Bin** in Settings.
 - **Running apps are respected.** A running app's cache is left unticked, and files in use are skipped.
 - **Fresh files are kept.** Temp files used in the last 24 hours are never removed.
 - **"Never touch" list.** Add any file or folder in Settings and WinCleaner will never touch it.
@@ -186,8 +205,13 @@ No. It works fine without admin. Admin unlocks a few extra items, and they're cl
 
 **Does it send my data anywhere?**
 No. There's no account, telemetry or tracking. The only internet requests are:
-- loading Steam game cover images from Steam's image servers
-- the ping test to `1.1.1.1` on the Performance screen
+- the update check against this GitHub repository
+- the ping test to `1.1.1.1` and the game-region test on the Performance screen
+
+Steam cover art is read from Steam's own cache on your PC.
+
+**Something went wrong. How do I report it?**
+Go to **Settings → Advanced → Export diagnostics** and send that text file along with what happened. It contains your settings and the app log, never your files.
 
 **Why does Windows warn me when I install it?**
 The installer isn't code-signed. See [Install](#install).
@@ -211,6 +235,8 @@ WinCleaner is a [Tauri 2](https://tauri.app) app: a Rust backend with a React + 
 | System crash dumps | `%SystemRoot%\Minidump`, `%SystemRoot%\LiveKernelReports`, `%ProgramData%\Microsoft\Windows\WER\Report{Archive,Queue}` | ✓ | Admin |
 | Windows Update downloads | `%SystemRoot%\SoftwareDistribution\Download` | ✓ | Admin |
 | Delivery Optimization cache | `%SystemRoot%\ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\DeliveryOptimization\Cache` | ✓ | Admin |
+| Previous Windows installation | `C:\Windows.old`, `C:\$Windows.~BT`, `C:\$Windows.~WS` | ✓ | Admin. Removed through Disk Cleanup (`cleanmgr /sagerun`) because the files are owned by TrustedInstaller |
+| Hibernation file | `C:\hiberfil.sys` | ✗ | Admin. Runs `powercfg /hibernate off` (also disables Fast Startup) |
 | Recycle Bin | All drives (`SHEmptyRecycleBinW`) | ✗ | Unticked so Put back keeps working |
 | Steam web cache | `Steam\htmlcache`, `<Steam>\appcache\httpcache` | ✓ | Skipped while Steam is running |
 | Steam logs & crash dumps | `<Steam>\logs`, `<Steam>\dumps` | ✓ | |
@@ -219,6 +245,7 @@ WinCleaner is a [Tauri 2](https://tauri.app) app: a Rust backend with a React + 
 | GOG Galaxy cache | `%ProgramData%\GOG.com\Galaxy\webcache` | ✓ | |
 | Discord cache | `%APPDATA%\discord\{Cache, Code Cache, GPUCache}`, `%APPDATA%\discordptb\Cache`, `%APPDATA%\discordcanary\Cache` | ✓ | |
 | Old GPU driver installers | `C:\NVIDIA`, `C:\AMD` | ✓ | Extracted setup files |
+| NVIDIA driver downloads | `%ProgramData%\NVIDIA Corporation\Downloader` | ✓ | Admin |
 | GPU shader cache | `NVIDIA\DXCache`, `NVIDIA\GLCache`, `NVIDIA Corporation\NV_Cache`, `D3DSCache`, `AMD\{DxCache,DxcCache,VkCache,GLCache}`, `Intel\ShaderCache`, `%USERPROFILE%\AppData\LocalLow\NVIDIA\PerDriverVersion\{DXCache,GLCache}` | ✗ | Rebuilt on next launch |
 | Steam shader pre-caches | `<each Steam library>\steamapps\shadercache` | ✗ | |
 | Chrome / Edge / Brave | `…\User Data\*\{Cache, Code Cache, GPUCache, Service Worker\CacheStorage}`, `ShaderCache`, `GrShaderCache` | ✓ | Skipped while the browser runs |
@@ -235,7 +262,7 @@ WinCleaner is a [Tauri 2](https://tauri.app) app: a Rust backend with a React + 
 |---|---|---|
 | Game Mode | `HKCU\Software\Microsoft\GameBar\AutoGameModeEnabled` = 1 | Set back to 0 |
 | Background recording off | `HKCU\System\GameConfigStore\GameDVR_Enabled` = 0, `HKCU\…\CurrentVersion\GameDVR\AppCaptureEnabled` = 0 | Set back to 1 |
-| High performance power | `powercfg /setactive 8c5e7fda-…` (recreated with `/duplicatescheme` if hidden). The previous plan's GUID is saved | Restores the saved plan, or Balanced |
+| High performance power | `powercfg /setactive 8c5e7fda-…`. If the plan is hidden (common on laptops), a copy is made once with `/duplicatescheme` and its GUID remembered. Plans are always compared by GUID, so it works on every Windows language | Restores the previously active plan, or Balanced |
 | Mouse acceleration off | `SystemParametersInfo(SPI_SETMOUSE, [0,0,0])` | `[6,10,1]` (Windows default) |
 | HW GPU scheduling | `HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\HwSchMode` = 2 | Set to 1. Admin, needs a reboot |
 | Free standby memory | `NtSetSystemInformation(SystemMemoryListInformation, MemoryPurgeStandbyList)` with `SeProfileSingleProcessPrivilege` | Not needed (it's a cache) |
@@ -246,6 +273,7 @@ WinCleaner is a [Tauri 2](https://tauri.app) app: a Rust backend with a React + 
 | Optimize drives | `defrag /C /O /H` | Admin |
 | Clean up components | `Dism /Online /Cleanup-Image /StartComponentCleanup` | Admin |
 | Repair system files | `sfc /scannow` | Admin |
+| Restore point | `Checkpoint-Computer -RestorePointType MODIFY_SETTINGS` (PowerShell) | Admin. Before Boost, tweaks and network reset, at most once per 24 h |
 
 **Closing background apps:**
 - Apps are closed with `taskkill /IM <name>` without `/F`, so each one gets a normal close request.
@@ -274,6 +302,7 @@ The original Run entry and shortcut are never modified. Entries for all users (H
 | Steam | Install path from `HKCU\Software\Valve\Steam\SteamPath`. Libraries from `steamapps\libraryfolders.vdf`. Games from `appmanifest_*.acf` (name, `SizeOnDisk`, `LastPlayed`) |
 | Epic | `%ProgramData%\Epic\EpicGamesLauncher\Data\Manifests\*.item` (JSON) |
 | GOG | `HKLM\SOFTWARE\WOW6432Node\GOG.com\Games\*`. Size is measured from the install folder |
+| Battle.net | Uninstall entries whose uninstaller is `Battle.net Launcher.exe`. Uninstalling runs that entry through the Uninstaller |
 
 **Leftovers** are:
 - folders in `steamapps\common` that no manifest references
@@ -293,6 +322,8 @@ Every deletion goes through one function, `core::remove`. It re-checks a per-too
 | Clean | A direct child of one of that category's root folders (re-read at clean time), with matching filename prefix where relevant |
 | Big Files, Duplicates, Disk Map | Inside your profile or personal folders, but not the folder itself, not `AppData`, `.ssh`, `Saved Games`, `Documents\My Games`, `Rockstar Games` or `Electronic Arts`. On other drives: at least two levels deep and outside `Windows`, `Program Files`, `ProgramData`, `$Recycle.Bin`, `System Volume Information` |
 | Uninstaller leftovers | One or two levels inside `%APPDATA%`, `%LOCALAPPDATA%`, `LocalLow`, `%ProgramData%` or `Program Files`, and never a shared vendor folder (Microsoft, NVIDIA, Steam…) |
+| Registry leftovers | Only `HKCU\Software\X[\Y]` or `HKLM\SOFTWARE[\WOW6432Node]\X[\Y]`, never shared keys (Microsoft, Classes, Policies…). Exported with `reg export` before deletion; Put back runs `reg import` |
+| Duplicates | Each group is re-hashed (SHA-256) right before deletion. A file is only removed if an identical, unselected copy remains |
 | Game leftovers | Must be in the freshly re-computed leftovers list |
 
 Additional rules:
@@ -309,6 +340,8 @@ Additional rules:
 | Settings | `%APPDATA%\WinCleaner for Gamers\settings.json` |
 | History & XP | `%APPDATA%\WinCleaner for Gamers\history.json` (last 200 operations) |
 | Scheduled clean log | `%LOCALAPPDATA%\WinCleaner for Gamers\autoclean.log` |
+| App log (rotates at 1 MB) | `%LOCALAPPDATA%\WinCleaner for Gamers\logs\wincleaner.log` |
+| Registry backups | `%APPDATA%\WinCleaner for Gamers\registry-backups\*.reg` |
 | WebView data | `%LOCALAPPDATA%\com.marknap.wincleaner\` |
 
 ### Scheduled cleaning
@@ -332,7 +365,7 @@ That run is headless: no window, auto-clean categories only, and anything in use
 | Game leftovers | 2 per GB, max 10 |
 | System drive under 20% free | 10 (20 if under 10% free) |
 
-Grades: **S** ≥ 95, **A** ≥ 85, **B** ≥ 70, **C** ≥ 50, **D** below that.
+**Grades:** **S** ≥ 95, **A** ≥ 85, **B** ≥ 70, **C** ≥ 50, **D** below that.
 
 **XP** = MB freed + 100 per boost + 25 per scan.
 
@@ -362,7 +395,15 @@ npm run tauri build    # release build
 | App | `src-tauri/target/release/wincleaner.exe` |
 | Installer | `src-tauri/target/release/bundle/nsis/WinCleaner for Gamers_<version>_x64-setup.exe` |
 
-**No Windows machine?** Push to GitHub. `.github/workflows/build.yml` builds the installer on `windows-latest` and uploads it as a workflow artifact.
+**No Windows machine?** Push to GitHub. The **CI** workflow (`.github/workflows/ci.yml`) lints, tests and builds the installer on `windows-latest` and uploads it as a workflow artifact.
+
+**Checks** (also run in CI):
+
+```sh
+npm run lint                                   # ESLint + TypeScript
+cd src-tauri && cargo clippy --all-targets -- -D warnings
+cd src-tauri && cargo test                     # safety rules, parsers, benchmark math...
+```
 
 **UI-only preview (any OS):** `npm run dev`, then open http://localhost:1420. Outside Tauri the UI runs on sample data from `src/mock.ts`.
 
@@ -374,34 +415,64 @@ brew install llvm                       # provides llvm-rc, needed for Windows r
 PATH="$(brew --prefix llvm)/bin:$PATH" npm run check:win
 ```
 
+### Releasing and auto-updates
+
+Installed copies update themselves from GitHub Releases using Tauri's updater. Updates are signed: the public key is in `tauri.conf.json`, the private key never leaves your machine or GitHub's secret store.
+
+**One-time setup:**
+
+1. Generate a key pair (already done for this repo; the private key lives in `~/.tauri/wincleaner.key`):
+   ```sh
+   npx tauri signer generate -w ~/.tauri/wincleaner.key
+   ```
+2. Add two repository secrets (**Settings → Secrets and variables → Actions**):
+   - `TAURI_SIGNING_PRIVATE_KEY`: the contents of `~/.tauri/wincleaner.key`
+   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: the key password (empty if none)
+
+   With the GitHub CLI: `gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/wincleaner.key`.
+
+**Every release:**
+
+1. Bump `version` in `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`.
+2. Commit, then tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
+3. The **Release** workflow builds a signed installer, publishes a GitHub Release and uploads `latest.json`. Running copies see the update on their next start.
+
+> Lose the private key and existing installs can't verify new updates anymore. Keep a backup somewhere safe.
+
 ---
 
 ## Project layout
 
 ```
 src/                     React UI
-  App.tsx                Window chrome, sidebar, toasts, shared state
+  App.tsx                Window chrome, sidebar, toasts, dialogs, updates, shared state
   pages/                 One file per screen
   api.ts                 Typed backend commands (+ mock fallback)
   mock.ts                Sample data for browser preview
-  components.tsx         Buttons, toggles, charts, icons
+  i18n.ts                English / Dutch: L("English", "Nederlands")
+  achievements.ts        Achievements and week streak
+  updater.ts             Update check and install
+  components.tsx         Buttons, toggles, charts, icons, modal
   styles.css             The whole look
 src-tauri/
-  tauri.conf.json        Window, CSP, installer config
+  tauri.conf.json        Window, CSP, installer, updater config
   capabilities/          What the UI is allowed to call
   src/
-    main.rs              Commands, tray icon, --auto-clean entry point
-    core.rs              Paths, safety rules, removal, progress, Windows helpers
+    main.rs              Commands, tray (with live stats), single instance, --auto-clean
+    core.rs              Paths, safety rules, removal, restore points, Windows helpers
+    l10n.rs              English / Dutch for backend messages
+    diag.rs              Log file and diagnostics export
     clean.rs             Junk categories, scanning and cleaning
-    games.rs             Steam/Epic/GOG library, leftovers, launcher links
+    games.rs             Steam/Epic/GOG/Battle.net library, leftovers, cover art, launcher links
     boost.rs             Game Boost, quick fixes, tweaks
+    perf.rs              Game-region latency, PresentMon FPS benchmark
     startup.rs           Startup apps (StartupApproved)
-    apps.rs              Installed programs, uninstall, leftovers
-    files.rs             Big files, duplicates
+    apps.rs              Installed programs, uninstall, folder and registry leftovers
+    files.rs             Big files, clips, duplicates
     analyze.rs           Disk Map tree
-    status.rs            Live stats (sysinfo, PDH, ICMP, nvidia-smi)
-    history.rs           History log and Put back
-    prefs.rs             Settings and Task Scheduler
+    status.rs            Live stats (sysinfo, PDH, ICMP, nvidia-smi, ACPI temperature)
+    history.rs           History log, Put back, counters for ranks and achievements
+    prefs.rs             Settings, export/import and Task Scheduler
 ```
 
 ---
@@ -410,6 +481,6 @@ src-tauri/
 
 1. Turn off **Clean automatically** in Settings first. This removes the scheduled task.
 2. Uninstall via **Settings → Apps → Installed apps → WinCleaner for Gamers**.
-3. Optionally delete `%APPDATA%\WinCleaner for Gamers` to remove your settings and history.
+3. Optionally delete `%APPDATA%\WinCleaner for Gamers` and `%LOCALAPPDATA%\WinCleaner for Gamers` to remove your settings, history and logs.
 
 Startup apps you disabled and gaming settings you changed stay as they are. Switch them back in the app before uninstalling if you want the originals.
